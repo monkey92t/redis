@@ -243,15 +243,19 @@ func (c *baseClient) initConn(ctx context.Context, cn *pool.Conn) error {
 	connPool := pool.NewSingleConnPool(c.connPool, cn)
 	conn := newConn(ctx, c.opt, connPool)
 
+	var auth bool
+
+	// The low version of redis-server does not support the hello command.
+	if err := conn.Hello(ctx, 3, c.opt.Username, c.opt.Password, "").Err(); err == nil {
+		auth = true
+	}
+
 	_, err := conn.Pipelined(ctx, func(pipe Pipeliner) error {
-		// The low version of redis-server does not support the hello command.
-		if err := pipe.Hello(ctx, 3, c.opt.Username, c.opt.Password, "").Err(); err != nil {
-			if c.opt.Password != "" {
-				if c.opt.Username != "" {
-					pipe.AuthACL(ctx, c.opt.Username, c.opt.Password)
-				} else {
-					pipe.Auth(ctx, c.opt.Password)
-				}
+		if !auth && c.opt.Password != "" {
+			if c.opt.Username != "" {
+				pipe.AuthACL(ctx, c.opt.Username, c.opt.Password)
+			} else {
+				pipe.Auth(ctx, c.opt.Password)
 			}
 		}
 
