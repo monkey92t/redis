@@ -53,7 +53,7 @@ var _ = Describe("Commands", func() {
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-			m, err := cmds[0].(*redis.StringStringMapCmd).Result()
+			m, err := cmds[0].(*redis.MapStringInterfaceCmd).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m["proto"]).To(Equal(3))
 		})
