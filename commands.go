@@ -351,6 +351,7 @@ type StatefulCmdable interface {
 	Select(ctx context.Context, index int) *StatusCmd
 	SwapDB(ctx context.Context, index1, index2 int) *StatusCmd
 	ClientSetName(ctx context.Context, name string) *BoolCmd
+	Hello(ctx context.Context, ver int, username, password, clientName string) *StringStringMapCmd
 }
 
 var (
@@ -402,6 +403,25 @@ func (c statefulCmdable) SwapDB(ctx context.Context, index1, index2 int) *Status
 // ClientSetName assigns a name to the connection.
 func (c statefulCmdable) ClientSetName(ctx context.Context, name string) *BoolCmd {
 	cmd := NewBoolCmd(ctx, "client", "setname", name)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+// Set the resp protocol used.
+func (c statefulCmdable) Hello(ctx context.Context, ver int, username, password, clientName string) *StringStringMapCmd {
+	args := make([]interface{}, 2, 7)
+	args = append(args, "hello", ver)
+	if password != "" {
+		if username != "" {
+			args = append(args, username, password)
+		} else {
+			args = append(args, "default", password)
+		}
+	}
+	if clientName != "" {
+		args = append(args, clientName)
+	}
+	cmd := NewStringStringMapCmd(ctx, args...)
 	_ = c(ctx, cmd)
 	return cmd
 }
