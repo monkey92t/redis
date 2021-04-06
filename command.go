@@ -2411,3 +2411,39 @@ func (cmd *SlowLogCmd) readReply(pv *proto.Value) error {
 
 	return err
 }
+
+//-----------------------------------------------------------------------
+
+type MapStringInterfaceCmd struct {
+	baseCmd
+
+	val map[string]interface{}
+}
+
+var _ Cmder = (*MapStringInterfaceCmd)(nil)
+
+func NewMapStringInterfaceCmd(ctx context.Context, args ...interface{}) *MapStringInterfaceCmd {
+	return &MapStringInterfaceCmd{
+		baseCmd: baseCmd{
+			ctx:  ctx,
+			args: args,
+		},
+	}
+}
+
+func (cmd *MapStringInterfaceCmd) Val() map[string]interface{} {
+	return cmd.val
+}
+
+func (cmd *MapStringInterfaceCmd) Result() (map[string]interface{}, error) {
+	return cmd.Val(), cmd.Err()
+}
+
+func (cmd *MapStringInterfaceCmd) String() string {
+	return cmdString(cmd, cmd.val)
+}
+
+func (cmd *MapStringInterfaceCmd) readReply(pv *proto.Value) (err error) {
+	cmd.val, err = pv.MapStringInterface()
+	return err
+}

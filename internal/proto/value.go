@@ -269,6 +269,44 @@ func (v *Value) MapStringInt64() (map[string]int64, error) { //nolint:dupl
 	return nil, errMap
 }
 
+func (v *Value) MapStringInterface() (map[string]interface{}, error) {
+	if v.RedisError != nil {
+		return nil, v.RedisError
+	}
+
+	m := make(map[string]interface{})
+	switch v.Typ {
+	case redisMap:
+		for key, val := range v.Map {
+			keyStr, err := key.String()
+			if err != nil {
+				return nil, err
+			}
+			m[keyStr] = val.Interface()
+		}
+		return m, nil
+	case redisArray, redisSet, redisPush:
+		n := len(v.Slice)
+		if n == 0 {
+			return m, nil
+		}
+		if n%2 != 0 {
+			return nil, errors.New("the map requires the result set to be a multiple of 2")
+		}
+		for i := 0; i < n; i += 2 {
+			keyStr, err := v.Slice[i].String()
+			if err != nil {
+				return nil, err
+			}
+			m[keyStr] = v.Slice[i+1].Interface()
+		}
+
+		return m, nil
+	}
+
+	return nil, errMap
+}
+
 // Convert the result set to []string, which requires the result set to be a simple array,
 // if it is a complex array, it needs to be converted in the outer layer.
 func (v *Value) SliceString() ([]string, error) {
