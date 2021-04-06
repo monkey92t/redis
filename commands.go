@@ -410,7 +410,7 @@ func (c statefulCmdable) ClientSetName(ctx context.Context, name string) *BoolCm
 // Set the resp protocol used.
 func (c statefulCmdable) Hello(ctx context.Context,
 	ver int, username, password, clientName string) *StringStringMapCmd {
-	args := make([]interface{}, 2, 7)
+	args := make([]interface{}, 0, 7)
 	args = append(args, "hello", ver)
 	if password != "" {
 		if username != "" {
