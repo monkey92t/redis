@@ -47,6 +47,20 @@ var _ = Describe("Commands", func() {
 			Expect(stats.IdleConns).To(Equal(uint32(1)))
 		})
 
+		It("should hello", func() {
+			cmds, err := client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Hello(ctx, 3, "", "", "")
+				return nil
+			})
+			Expect(err).NotTo(Or(HaveOccurred(), Not(Equal(proto.RedisError("ERR unknown command 'hello'")))))
+
+			if err == nil {
+				m, err := cmds[0].(*redis.StringStringMapCmd).Result()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(m["proto"]).To(Equal(3))
+			}
+		})
+
 		It("should Echo", func() {
 			pipe := client.Pipeline()
 			echo := pipe.Echo(ctx, "hello")

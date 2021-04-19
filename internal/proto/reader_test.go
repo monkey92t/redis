@@ -25,7 +25,7 @@ func BenchmarkReader_ParseReply_String(b *testing.B) {
 }
 
 func BenchmarkReader_ParseReply_Slice(b *testing.B) {
-	benchmarkParseReply(b, "*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n", multiBulkParse, false)
+	benchmarkParseReply(b, "*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n", aggregateBulkParse, false)
 }
 
 func TestReader_ReadLine(t *testing.T) {
@@ -43,7 +43,7 @@ func TestReader_ReadLine(t *testing.T) {
 	}
 }
 
-func benchmarkParseReply(b *testing.B, reply string, m proto.MultiBulkParse, wanterr bool) {
+func benchmarkParseReply(b *testing.B, reply string, m proto.AggregateBulkParse, wanterr bool) {
 	buf := new(bytes.Buffer)
 	for i := 0; i < b.N; i++ {
 		buf.WriteString(reply)
@@ -59,10 +59,10 @@ func benchmarkParseReply(b *testing.B, reply string, m proto.MultiBulkParse, wan
 	}
 }
 
-func multiBulkParse(p *proto.Reader, n int64) (interface{}, error) {
+func aggregateBulkParse(p *proto.Reader, typ byte, n int64) (interface{}, error) {
 	vv := make([]interface{}, 0, n)
 	for i := int64(0); i < n; i++ {
-		v, err := p.ReadReply(multiBulkParse)
+		v, err := p.ReadReply(aggregateBulkParse)
 		if err != nil {
 			return nil, err
 		}
