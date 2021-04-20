@@ -259,6 +259,7 @@ func (r *Reader) Pathfinder() ([]byte, error) {
 		return r.Pathfinder()
 	}
 
+	// Compatible with RESP2
 	if IsNilReply(line) {
 		return nil, Nil
 	}

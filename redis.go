@@ -230,13 +230,6 @@ func (c *baseClient) initConn(ctx context.Context, cn *pool.Conn) error {
 	}
 	cn.Inited = true
 
-	if c.opt.Password == "" &&
-		c.opt.DB == 0 &&
-		!c.opt.readOnly &&
-		c.opt.OnConnect == nil {
-		return nil
-	}
-
 	ctx, span := internal.StartSpan(ctx, "redis.init_conn")
 	defer span.End()
 
