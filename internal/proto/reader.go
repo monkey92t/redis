@@ -233,7 +233,7 @@ func (r *Reader) readVerb(line []byte) (string, error) {
 
 // -------------------------------
 
-// Pathfinder clean up possible errors in redis responses and discard attr attributes,
+// Pathfinder find up possible errors in redis responses and discard attr attributes,
 // `line` that returns the true reply.
 func (r *Reader) Pathfinder() ([]byte, error) {
 	line, err := r.readLine()

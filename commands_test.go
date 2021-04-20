@@ -57,7 +57,7 @@ var _ = Describe("Commands", func() {
 			if err == nil {
 				m, err := cmds[0].(*redis.MapStringInterfaceCmd).Result()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(m["proto"]).To(Equal(3))
+				Expect(m["proto"]).To(Equal(int64(3)))
 			}
 		})
 
@@ -1865,8 +1865,8 @@ var _ = Describe("Commands", func() {
 			kv, err := client.HRandFieldWithValues(ctx, "hash", 1).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kv).To(Or(
-				Equal([]redis.KeyValue{{Key: "key1", Value: "value1"}}),
-				Equal([]redis.KeyValue{{Key: "key2", Value: "value2"}}),
+				Equal([]redis.KeyValue{{Key: "key1", Value: "hello1"}}),
+				Equal([]redis.KeyValue{{Key: "key2", Value: "hello2"}}),
 			))
 		})
 	})
@@ -3936,18 +3936,20 @@ var _ = Describe("Commands", func() {
 			err = client.ZAdd(ctx, "zset", &redis.Z{Score: 2, Member: "two"}).Err()
 			Expect(err).NotTo(HaveOccurred())
 
-			v := client.ZRandMember(ctx, "zset", 1, false)
+			v := client.ZRandMember(ctx, "zset", 1)
 			Expect(v.Err()).NotTo(HaveOccurred())
 			Expect(v.Val()).To(Or(Equal([]string{"one"}), Equal([]string{"two"})))
 
-			v = client.ZRandMember(ctx, "zset", 0, false)
+			v = client.ZRandMember(ctx, "zset", 0)
 			Expect(v.Err()).NotTo(HaveOccurred())
 			Expect(v.Val()).To(HaveLen(0))
 
-			var slice []string
-			err = client.ZRandMember(ctx, "zset", 1, true).ScanSlice(&slice)
+			kv, err := client.ZRandMemberWithScores(ctx, "zset", 1).Result()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(slice).To(Or(Equal([]string{"one", "1"}), Equal([]string{"two", "2"})))
+			Expect(kv).To(Or(
+				Equal([]redis.Z{{Member: "one", Score: 1}}),
+				Equal([]redis.Z{{Member: "two", Score: 2}}),
+			))
 		})
 	})
 

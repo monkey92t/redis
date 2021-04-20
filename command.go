@@ -987,36 +987,35 @@ func (cmd *SliceKeyValueCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error { //nolint:dupl
+func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if rd.Resp == 3 {
-			cmd.val = make([]KeyValue, n)
+		// Unsure of return value type.
+		if rd.Resp == 2 {
+			cmd.val = make([]KeyValue, 0, n/2)
 		} else {
-			cmd.val = make([]KeyValue, n/2)
+			cmd.val = make([]KeyValue, 0, n)
 		}
 
-		for i := 0; i < len(cmd.val); i++ {
-			if rd.Resp == 3 {
-				n, err := rd.ReadArrayLen()
-				if err != nil {
-					return nil, err
-				}
-				if n != 2 {
+		for i := int64(0); i < n; i++ {
+			key, err := rd.ReadReply(func(rd *proto.Reader, _ byte, n2 int64) (interface{}, error) {
+				if n2 != 2 {
 					return nil, fmt.Errorf("got %d elements in key-value, expected 2", n)
 				}
-			}
-			key, err := rd.ReadString()
+				return rd.ReadString()
+			})
 			if err != nil {
 				return nil, err
 			}
+
 			value, err := rd.ReadString()
 			if err != nil {
 				return nil, err
 			}
-			cmd.val[i] = KeyValue{
-				Key:   key,
+
+			cmd.val = append(cmd.val, KeyValue{
+				Key:   key.(string),
 				Value: value,
-			}
+			})
 		}
 		return nil, nil
 	})
@@ -1386,33 +1385,38 @@ func (cmd *XStreamSliceCmd) String() string {
 }
 
 func (cmd *XStreamSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
+	_, err := rd.ReadReply(func(rd *proto.Reader, typ byte, n int64) (interface{}, error) {
 		cmd.val = make([]XStream, n)
+
+		var stream string
 		for i := 0; i < len(cmd.val); i++ {
-			i := i
-			_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-				if n != 2 {
-					return nil, fmt.Errorf("got %d, wanted 2", n)
-				}
-
-				stream, err := rd.ReadString()
+			if typ == proto.RespMap {
+				var err error
+				stream, err = rd.ReadString()
 				if err != nil {
 					return nil, err
 				}
-
-				msgs, err := readXMessageSlice(rd)
+			} else {
+				v, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
+					if n != 2 {
+						return nil, fmt.Errorf("got %d, wanted 2", n)
+					}
+					return rd.ReadString()
+				})
 				if err != nil {
 					return nil, err
 				}
+				stream = v.(string)
+			}
 
-				cmd.val[i] = XStream{
-					Stream:   stream,
-					Messages: msgs,
-				}
-				return nil, nil
-			})
+			msgs, err := readXMessageSlice(rd)
 			if err != nil {
 				return nil, err
+			}
+
+			cmd.val[i] = XStream{
+				Stream:   stream,
+				Messages: msgs,
 			}
 		}
 		return nil, nil
@@ -1919,37 +1923,35 @@ func (cmd *ZSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error { // nolint:dupl
+func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if rd.Resp == 3 {
-			cmd.val = make([]Z, n)
+		// Unsure of return value type.
+		if rd.Resp == 2 {
+			cmd.val = make([]Z, 0, n/2)
 		} else {
-			cmd.val = make([]Z, n/2)
+			cmd.val = make([]Z, 0, n)
 		}
 
-		for i := 0; i < len(cmd.val); i++ {
-			if rd.Resp == 3 {
-				n, err := rd.ReadArrayLen()
-				if err != nil {
-					return nil, err
+		for i := int64(0); i < n; i++ {
+			member, err := rd.ReadReply(func(rd *proto.Reader, _ byte, n2 int64) (interface{}, error) {
+				if n2 != 2 {
+					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", n2)
 				}
-				if n != 2 {
-					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", n)
-				}
-			}
-
-			member, err := rd.ReadString()
+				return rd.ReadString()
+			})
 			if err != nil {
 				return nil, err
 			}
+
 			score, err := rd.ReadFloat()
 			if err != nil {
 				return nil, err
 			}
-			cmd.val[i] = Z{
+
+			cmd.val = append(cmd.val, Z{
 				Member: member,
 				Score:  score,
-			}
+			})
 		}
 		return nil, nil
 	})
