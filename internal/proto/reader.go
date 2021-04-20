@@ -228,7 +228,7 @@ func (r *Reader) readVerb(line []byte) (string, error) {
 	if len(s) < 4 || s[3] != ':' {
 		return "", fmt.Errorf("redis: can't parse verbatim string reply: %q", line)
 	}
-	return s, nil
+	return s[4:], nil
 }
 
 // -------------------------------
