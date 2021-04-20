@@ -2300,7 +2300,7 @@ func newGeoLocationSliceParser(q *GeoRadiusQuery) proto.MultiBulkParse {
 	return func(rd *proto.Reader, n int64) (interface{}, error) {
 		locs := make([]GeoLocation, 0, n)
 		for i := int64(0); i < n; i++ {
-			v, err := rd.ReadArrayReply(newGeoLocationParser(q))
+			v, err := rd.ReadReply(newGeoLocationParser(q))
 			if err != nil {
 				return nil, err
 			}
@@ -2320,8 +2320,8 @@ func newGeoLocationSliceParser(q *GeoRadiusQuery) proto.MultiBulkParse {
 	}
 }
 
-func newGeoLocationParser(q *GeoRadiusQuery) proto.MultiBulkParse {
-	return func(rd *proto.Reader, n int64) (interface{}, error) {
+func newGeoLocationParser(q *GeoRadiusQuery) proto.AggregateBulkParse {
+	return func(rd *proto.Reader, _ byte, n int64) (interface{}, error) {
 		var loc GeoLocation
 		var err error
 
