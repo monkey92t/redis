@@ -259,6 +259,10 @@ func (r *Reader) Pathfinder() ([]byte, error) {
 		return r.Pathfinder()
 	}
 
+	if IsNilReply(line) {
+		return nil, Nil
+	}
+
 	return line, nil
 }
 
@@ -494,6 +498,13 @@ func replyLen(line []byte) (n int, err error) {
 		}
 	}
 	return n, nil
+}
+
+// IsNilReply detect redis.Nil of RESP2.
+func IsNilReply(line []byte) bool {
+	return len(line) == 3 &&
+		(line[0] == RespString || line[0] == RespArray) &&
+		line[1] == '-' && line[2] == '1'
 }
 
 func ParseErrorReply(line []byte) error {
