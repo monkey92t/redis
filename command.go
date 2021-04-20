@@ -1666,12 +1666,12 @@ func (cmd *XInfoConsumersCmd) readReply(rd *proto.Reader) error {
 func readXConsumerInfo(rd *proto.Reader) (XInfoConsumer, error) {
 	var consumer XInfoConsumer
 
-	n, err := rd.ReadArrayLen()
+	n, err := rd.ReadMapLen()
 	if err != nil {
 		return consumer, err
 	}
-	if n != 6 {
-		return consumer, fmt.Errorf("redis: got %d elements in XINFO CONSUMERS reply, wanted 6", n)
+	if n != 3 {
+		return consumer, fmt.Errorf("redis: got %d elements in XINFO CONSUMERS reply, wanted 3", n)
 	}
 
 	for i := 0; i < 3; i++ {
@@ -1764,12 +1764,12 @@ func (cmd *XInfoGroupsCmd) readReply(rd *proto.Reader) error {
 func readXGroupInfo(rd *proto.Reader) (XInfoGroup, error) {
 	var group XInfoGroup
 
-	n, err := rd.ReadArrayLen()
+	n, err := rd.ReadMapLen()
 	if err != nil {
 		return group, err
 	}
-	if n != 8 {
-		return group, fmt.Errorf("redis: got %d elements in XINFO GROUPS reply, wanted 8", n)
+	if n != 4 {
+		return group, fmt.Errorf("redis: got %d elements in XINFO GROUPS reply, wanted 4", n)
 	}
 
 	for i := 0; i < 4; i++ {
@@ -1847,7 +1847,7 @@ func (cmd *XInfoStreamCmd) String() string {
 }
 
 func (cmd *XInfoStreamCmd) readReply(rd *proto.Reader) error {
-	v, err := rd.ReadArrayReply(xStreamInfoParser)
+	v, err := rd.ReadMapReply(xStreamInfoParser)
 	if err != nil {
 		return err
 	}
@@ -1856,9 +1856,9 @@ func (cmd *XInfoStreamCmd) readReply(rd *proto.Reader) error {
 }
 
 func xStreamInfoParser(rd *proto.Reader, n int64) (interface{}, error) {
-	if n != 14 {
+	if n != 7 {
 		return nil, fmt.Errorf("redis: got %d elements in XINFO STREAM reply,"+
-			"wanted 14", n)
+			"wanted 7", n)
 	}
 	var info XInfoStream
 	for i := 0; i < 7; i++ {
