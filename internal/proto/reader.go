@@ -59,12 +59,20 @@ type (
 type Reader struct {
 	rd      *bufio.Reader
 	discard []byte
+
+	Resp int
 }
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
-		rd: bufio.NewReader(rd),
+		rd:      bufio.NewReader(rd),
+		discard: make([]byte, 64),
+		Resp:    2,
 	}
+}
+
+func (r *Reader) SetResp(v int) {
+	r.Resp = v
 }
 
 func (r *Reader) Buffered() int {
@@ -373,6 +381,12 @@ func (r *Reader) ReadMapReply(m MultiBulkParse) (interface{}, error) {
 			return nil, err
 		}
 		return m(r, int64(n))
+	case RespArray, RespSet, RespPush:
+		n, err := replyLen(line)
+		if err != nil {
+			return nil, err
+		}
+		return m(r, int64(n/2))
 	default:
 		return nil, fmt.Errorf("redis: can't parse map reply: %.100q", line)
 	}

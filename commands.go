@@ -168,7 +168,8 @@ type Cmdable interface {
 	HMSet(ctx context.Context, key string, values ...interface{}) *BoolCmd
 	HSetNX(ctx context.Context, key, field string, value interface{}) *BoolCmd
 	HVals(ctx context.Context, key string) *StringSliceCmd
-	HRandField(ctx context.Context, key string, count int, withValues bool) *StringSliceCmd
+	HRandField(ctx context.Context, key string, count int) *StringSliceCmd
+	HRandFieldWithValues(ctx context.Context, key string, count int) *SliceKeyValueCmd
 
 	BLPop(ctx context.Context, timeout time.Duration, keys ...string) *StringSliceCmd
 	BRPop(ctx context.Context, timeout time.Duration, keys ...string) *StringSliceCmd
@@ -287,7 +288,7 @@ type Cmdable interface {
 	ClientList(ctx context.Context) *StringCmd
 	ClientPause(ctx context.Context, dur time.Duration) *BoolCmd
 	ClientID(ctx context.Context) *IntCmd
-	ConfigGet(ctx context.Context, parameter string) *SliceCmd
+	ConfigGet(ctx context.Context, parameter string) *StringStringMapCmd
 	ConfigResetStat(ctx context.Context) *StatusCmd
 	ConfigSet(ctx context.Context, parameter, value string) *StatusCmd
 	ConfigRewrite(ctx context.Context) *StatusCmd
@@ -461,7 +462,7 @@ func (c cmdable) Ping(ctx context.Context) *StatusCmd {
 	return cmd
 }
 
-func (c cmdable) Quit(ctx context.Context) *StatusCmd {
+func (c cmdable) Quit(_ context.Context) *StatusCmd {
 	panic("not implemented")
 }
 
@@ -1243,16 +1244,15 @@ func (c cmdable) HVals(ctx context.Context, key string) *StringSliceCmd {
 }
 
 // redis-server version >= 6.2.0.
-func (c cmdable) HRandField(ctx context.Context, key string, count int, withValues bool) *StringSliceCmd {
-	args := make([]interface{}, 0, 4)
+func (c cmdable) HRandField(ctx context.Context, key string, count int) *StringSliceCmd {
+	cmd := NewStringSliceCmd(ctx, "hrandfield", key, count)
+	_ = c(ctx, cmd)
+	return cmd
+}
 
-	// Although count=0 is meaningless, redis accepts count=0.
-	args = append(args, "hrandfield", key, count)
-	if withValues {
-		args = append(args, "withvalues")
-	}
-
-	cmd := NewStringSliceCmd(ctx, args...)
+// redis-server version >= 6.2.0.
+func (c cmdable) HRandFieldWithValues(ctx context.Context, key string, count int) *SliceKeyValueCmd {
+	cmd := NewSliceKeyValueCmd(ctx, "hrandfield", key, count, "withvalues")
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -2452,8 +2452,8 @@ func (c cmdable) ClientUnblockWithError(ctx context.Context, id int64) *IntCmd {
 	return cmd
 }
 
-func (c cmdable) ConfigGet(ctx context.Context, parameter string) *SliceCmd {
-	cmd := NewSliceCmd(ctx, "config", "get", parameter)
+func (c cmdable) ConfigGet(ctx context.Context, parameter string) *StringStringMapCmd {
+	cmd := NewStringStringMapCmd(ctx, "config", "get", parameter)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -2574,7 +2574,7 @@ func (c cmdable) SlowLogGet(ctx context.Context, num int64) *SlowLogCmd {
 	return cmd
 }
 
-func (c cmdable) Sync(ctx context.Context) {
+func (c cmdable) Sync(_ context.Context) {
 	panic("not implemented")
 }
 

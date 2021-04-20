@@ -247,6 +247,7 @@ func (c *baseClient) initConn(ctx context.Context, cn *pool.Conn) error {
 
 	// The low version of redis-server does not support the hello command.
 	if err := conn.Hello(ctx, 3, c.opt.Username, c.opt.Password, "").Err(); err == nil {
+		cn.SetResp(3)
 		auth = true
 	}
 

@@ -52,10 +52,10 @@ var _ = Describe("Commands", func() {
 				pipe.Hello(ctx, 3, "", "", "")
 				return nil
 			})
-			Expect(err).NotTo(Or(HaveOccurred(), Not(Equal(proto.RedisError("ERR unknown command 'hello'")))))
+			Expect(err).To(Or(Not(HaveOccurred()), Equal(proto.RedisError("ERR unknown command 'hello'"))))
 
 			if err == nil {
-				m, err := cmds[0].(*redis.StringStringMapCmd).Result()
+				m, err := cmds[0].(*redis.MapStringInterfaceCmd).Result()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(m["proto"]).To(Equal(3))
 			}
@@ -196,10 +196,11 @@ var _ = Describe("Commands", func() {
 		It("should ConfigSet", func() {
 			configGet := client.ConfigGet(ctx, "maxmemory")
 			Expect(configGet.Err()).NotTo(HaveOccurred())
-			Expect(configGet.Val()).To(HaveLen(2))
-			Expect(configGet.Val()[0]).To(Equal("maxmemory"))
+			Expect(configGet.Val()).To(HaveLen(1))
+			_, ok := configGet.Val()["maxmemory"]
+			Expect(ok).To(BeTrue())
 
-			configSet := client.ConfigSet(ctx, "maxmemory", configGet.Val()[1].(string))
+			configSet := client.ConfigSet(ctx, "maxmemory", configGet.Val()["maxmemory"])
 			Expect(configSet.Err()).NotTo(HaveOccurred())
 			Expect(configSet.Val()).To(Equal("OK"))
 		})
@@ -1853,18 +1854,20 @@ var _ = Describe("Commands", func() {
 			err = client.HSet(ctx, "hash", "key2", "hello2").Err()
 			Expect(err).NotTo(HaveOccurred())
 
-			v := client.HRandField(ctx, "hash", 1, false)
+			v := client.HRandField(ctx, "hash", 1)
 			Expect(v.Err()).NotTo(HaveOccurred())
 			Expect(v.Val()).To(Or(Equal([]string{"key1"}), Equal([]string{"key2"})))
 
-			v = client.HRandField(ctx, "hash", 0, false)
+			v = client.HRandField(ctx, "hash", 0)
 			Expect(v.Err()).NotTo(HaveOccurred())
 			Expect(v.Val()).To(HaveLen(0))
 
-			var slice []string
-			err = client.HRandField(ctx, "hash", 1, true).ScanSlice(&slice)
+			kv, err := client.HRandFieldWithValues(ctx, "hash", 1).Result()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(slice).To(Or(Equal([]string{"key1", "hello1"}), Equal([]string{"key2", "hello2"})))
+			Expect(kv).To(Or(
+				Equal([]redis.KeyValue{{Key: "key1", Value: "value1"}}),
+				Equal([]redis.KeyValue{{Key: "key2", Value: "value2"}}),
+			))
 		})
 	})
 
@@ -4689,7 +4692,7 @@ var _ = Describe("Commands", func() {
 
 			old := client.ConfigGet(ctx, key).Val()
 			client.ConfigSet(ctx, key, "0")
-			defer client.ConfigSet(ctx, key, old[1].(string))
+			defer client.ConfigSet(ctx, key, old[key])
 
 			err := rdb.Do(ctx, "slowlog", "reset").Err()
 			Expect(err).NotTo(HaveOccurred())
