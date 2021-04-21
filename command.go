@@ -987,7 +987,7 @@ func (cmd *SliceKeyValueCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error {
+func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		if n == 0 {
 			cmd.val = make([]KeyValue, 0)
@@ -1939,7 +1939,7 @@ func (cmd *ZSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
+func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		if n == 0 {
 			cmd.val = make([]Z, 0)
