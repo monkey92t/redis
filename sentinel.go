@@ -364,8 +364,8 @@ func (c *SentinelClient) Masters(ctx context.Context) *SliceCmd {
 }
 
 // Slaves shows a list of slaves for the specified master and their state.
-func (c *SentinelClient) Slaves(ctx context.Context, name string) *SliceCmd {
-	cmd := NewSliceCmd(ctx, "sentinel", "slaves", name)
+func (c *SentinelClient) Slaves(ctx context.Context, name string) *SliceMapStringInterfaceCmd {
+	cmd := NewSliceMapStringInterfaceCmd(ctx, "sentinel", "slaves", name)
 	_ = c.Process(ctx, cmd)
 	return cmd
 }
