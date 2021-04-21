@@ -119,7 +119,7 @@ func (r *Reader) readLine() ([]byte, error) {
 }
 
 func (r *Reader) ReadReply(a AggregateBulkParse) (interface{}, error) {
-	line, err := r.readLine()
+	line, err := r.Pathfinder()
 	if err != nil {
 		return nil, err
 	}
@@ -127,12 +127,8 @@ func (r *Reader) ReadReply(a AggregateBulkParse) (interface{}, error) {
 	switch line[0] {
 	case RespStatus:
 		return string(line[1:]), nil
-	case RespError:
-		return nil, ParseErrorReply(line)
 	case RespInteger:
 		return util.ParseInt(line[1:], 10, 64)
-	case RespNil:
-		return nil, Nil
 	case RespFloat:
 		return r.readFloat(line)
 	case RespBool:
@@ -141,12 +137,6 @@ func (r *Reader) ReadReply(a AggregateBulkParse) (interface{}, error) {
 		return r.readBigInt(line)
 	//--------
 
-	case RespBlobError:
-		var blobErr string
-		if blobErr, err = r.readStringReply(line); err == nil {
-			err = RedisError(blobErr)
-		}
-		return nil, err
 	case RespString:
 		return r.readStringReply(line)
 	case RespVerb:
