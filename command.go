@@ -2799,16 +2799,16 @@ func (cmd *MapStringInterfaceCmd) readReply(rd *proto.Reader) error {
 
 //-----------------------------------------------------------------------
 
-type SliceMapStringInterfaceCmd struct {
+type SliceMapStringStringCmd struct {
 	baseCmd
 
-	val []map[string]interface{}
+	val []map[string]string
 }
 
-var _ Cmder = (*SliceMapStringInterfaceCmd)(nil)
+var _ Cmder = (*SliceMapStringStringCmd)(nil)
 
-func NewSliceMapStringInterfaceCmd(ctx context.Context, args ...interface{}) *SliceMapStringInterfaceCmd {
-	return &SliceMapStringInterfaceCmd{
+func NewSliceMapStringStringCmd(ctx context.Context, args ...interface{}) *SliceMapStringStringCmd {
+	return &SliceMapStringStringCmd{
 		baseCmd: baseCmd{
 			ctx:  ctx,
 			args: args,
@@ -2816,44 +2816,36 @@ func NewSliceMapStringInterfaceCmd(ctx context.Context, args ...interface{}) *Sl
 	}
 }
 
-func (cmd *SliceMapStringInterfaceCmd) Val() []map[string]interface{} {
+func (cmd *SliceMapStringStringCmd) Val() []map[string]string {
 	return cmd.val
 }
 
-func (cmd *SliceMapStringInterfaceCmd) Result() ([]map[string]interface{}, error) {
+func (cmd *SliceMapStringStringCmd) Result() ([]map[string]string, error) {
 	return cmd.Val(), cmd.Err()
 }
 
-func (cmd *SliceMapStringInterfaceCmd) String() string {
+func (cmd *SliceMapStringStringCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *SliceMapStringInterfaceCmd) readReply(rd *proto.Reader) error {
+func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
 	n, err := rd.ReadArrayLen()
 	if err != nil {
 		return err
 	}
 
-	cmd.val = make([]map[string]interface{}, n)
+	cmd.val = make([]map[string]string, n)
 	for i := 0; i < n; i++ {
 		_, err = rd.ReadMapReply(func(reader *proto.Reader, n int64) (interface{}, error) {
-			cmd.val[i] = make(map[string]interface{}, n)
+			cmd.val[i] = make(map[string]string, n)
 
 			k, err := rd.ReadString()
 			if err != nil {
 				return nil, err
 			}
 
-			v, err := rd.ReadReply(aggregateParser)
+			v, err := rd.ReadString()
 			if err != nil {
-				if err == Nil {
-					cmd.val[i][k] = Nil
-					return nil, nil
-				}
-				if err, ok := err.(proto.RedisError); ok {
-					cmd.val[i][k] = err
-					return nil, nil
-				}
 				return nil, err
 			}
 			cmd.val[i][k] = v
