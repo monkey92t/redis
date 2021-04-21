@@ -998,8 +998,8 @@ func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error {
 		if array {
 			cmd.val = make([]KeyValue, n)
 		} else {
-			cmd.val = make([]KeyValue, n/2)
 			n /= 2
+			cmd.val = make([]KeyValue, n)
 		}
 
 		for i := int64(0); i < n; i++ {
