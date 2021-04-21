@@ -990,6 +990,7 @@ func (cmd *SliceKeyValueCmd) String() string {
 func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		if n == 0 {
+			cmd.val = make([]KeyValue, 0)
 			return nil, nil
 		}
 
@@ -1941,6 +1942,7 @@ func (cmd *ZSliceCmd) String() string {
 func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		if n == 0 {
+			cmd.val = make([]Z, 0)
 			return nil, nil
 		}
 		b, err := rd.NextType()
