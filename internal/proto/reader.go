@@ -426,6 +426,12 @@ func (r *Reader) ReadMapLen() (int, error) {
 			return 0, err
 		}
 		return n, nil
+	case RespArray, RespSet, RespPush:
+		n, err := replyLen(line)
+		if err != nil {
+			return 0, err
+		}
+		return n/2, nil
 	default:
 		return 0, fmt.Errorf("redis: can't parse map reply: %.100q", line)
 	}
