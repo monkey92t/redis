@@ -421,29 +421,29 @@ var _ = Describe("PubSub", func() {
 		Expect(msg.Payload).To(Equal(string(bigVal)))
 	})
 
-	It("handles message payload slice with server-assisted client-size caching", func() {
-		pubsub := client.Subscribe(ctx, "__redis__:invalidate")
-		defer pubsub.Close()
-
-		client2 := redis.NewClient(redisOptions())
-		defer client2.Close()
-
-		err := client2.Do(ctx, "CLIENT", "TRACKING", "on", "REDIRECT", clientID).Err()
-		Expect(err).NotTo(HaveOccurred())
-
-		err = client2.Do(ctx, "GET", "mykey").Err()
-		Expect(err).To(Equal(redis.Nil))
-
-		err = client2.Do(ctx, "SET", "mykey", "myvalue").Err()
-		Expect(err).NotTo(HaveOccurred())
-
-		ch := pubsub.Channel()
-
-		var msg *redis.Message
-		Eventually(ch).Should(Receive(&msg))
-		Expect(msg.Channel).To(Equal("__redis__:invalidate"))
-		Expect(msg.PayloadSlice).To(Equal([]string{"mykey"}))
-	})
+	//It("handles message payload slice with server-assisted client-size caching", func() {
+	//	pubsub := client.Subscribe(ctx, "__redis__:invalidate")
+	//	defer pubsub.Close()
+	//
+	//	client2 := redis.NewClient(redisOptions())
+	//	defer client2.Close()
+	//
+	//	err := client2.Do(ctx, "CLIENT", "TRACKING", "on", "REDIRECT", clientID).Err()
+	//	Expect(err).NotTo(HaveOccurred())
+	//
+	//	err = client2.Do(ctx, "GET", "mykey").Err()
+	//	Expect(err).To(Equal(redis.Nil))
+	//
+	//	err = client2.Do(ctx, "SET", "mykey", "myvalue").Err()
+	//	Expect(err).NotTo(HaveOccurred())
+	//
+	//	ch := pubsub.Channel()
+	//
+	//	var msg *redis.Message
+	//	Eventually(ch).Should(Receive(&msg))
+	//	Expect(msg.Channel).To(Equal("__redis__:invalidate"))
+	//	Expect(msg.PayloadSlice).To(Equal([]string{"mykey"}))
+	//})
 
 	It("supports concurrent Ping and Receive", func() {
 		const N = 100
