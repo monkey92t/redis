@@ -57,17 +57,14 @@ type (
 )
 
 type Reader struct {
-	rd      *bufio.Reader
-	discard []byte
-
+	rd   *bufio.Reader
 	Resp int
 }
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
-		rd:      bufio.NewReader(rd),
-		discard: make([]byte, 64),
-		Resp:    2,
+		rd:   bufio.NewReader(rd),
+		Resp: 2,
 	}
 }
 
@@ -89,6 +86,15 @@ func (r *Reader) Reset(rd io.Reader) {
 
 func (r *Reader) ReadLine() ([]byte, error) {
 	return r.readLine()
+}
+
+// NextType get the type of the next row of data.
+func (r *Reader) NextType() (byte, error) {
+	b, err := r.rd.Peek(1)
+	if err != nil {
+		return 0, err
+	}
+	return b[0], nil
 }
 
 // readLine that returns an error if:
@@ -421,13 +427,13 @@ func (r *Reader) ReadMapLen() (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return n/2, nil
+		return n / 2, nil
 	default:
 		return 0, fmt.Errorf("redis: can't parse map reply: %.100q", line)
 	}
 }
 
-// Read and discard data.
+// Discard the data represented by line, if line is nil, read the next line.
 func (r *Reader) Discard(line []byte) (err error) {
 	if len(line) == 0 {
 		line, err = r.readLine()
@@ -448,15 +454,8 @@ func (r *Reader) Discard(line []byte) (err error) {
 	switch line[0] {
 	case RespBlobError, RespString, RespVerb:
 		// +\r\n
-		n += 2
-		if n > len(r.discard) {
-			r.discard = append(r.discard, make([]byte, n-len(r.discard))...)
-		}
-		_, err = io.ReadFull(r.rd, r.discard[:n])
-		if err != nil {
-			return err
-		}
-		return nil
+		_, err = r.rd.Discard(n + 2)
+		return err
 	case RespArray, RespSet, RespPush:
 		for i := 0; i < n; i++ {
 			if err = r.Discard(nil); err != nil {

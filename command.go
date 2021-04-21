@@ -989,33 +989,44 @@ func (cmd *SliceKeyValueCmd) String() string {
 
 func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		// Unsure of return value type.
-		if rd.Resp == 2 {
-			cmd.val = make([]KeyValue, 0, n/2)
+		b, err := rd.NextType()
+		if err != nil {
+			return nil, err
+		}
+		array := b == proto.RespArray
+
+		if array {
+			cmd.val = make([]KeyValue, n)
 		} else {
-			cmd.val = make([]KeyValue, 0, n)
+			cmd.val = make([]KeyValue, n/2)
+			n /= 2
 		}
 
 		for i := int64(0); i < n; i++ {
-			key, err := rd.ReadReply(func(rd *proto.Reader, _ byte, n2 int64) (interface{}, error) {
-				if n2 != 2 {
-					return nil, fmt.Errorf("got %d elements in key-value, expected 2", n)
+			if array {
+				n2, err := rd.ReadArrayLen()
+				if err != nil {
+					return nil, err
 				}
-				return rd.ReadString()
-			})
+				if n2 != 2 {
+					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", n2)
+				}
+			}
+
+			key, err := rd.ReadString()
 			if err != nil {
 				return nil, err
 			}
 
-			value, err := rd.ReadString()
+			val, err := rd.ReadString()
 			if err != nil {
 				return nil, err
 			}
 
-			cmd.val = append(cmd.val, KeyValue{
-				Key:   key.(string),
-				Value: value,
-			})
+			cmd.val[i] = KeyValue{
+				Key:   key,
+				Value: val,
+			}
 		}
 		return nil, nil
 	})
@@ -1925,20 +1936,31 @@ func (cmd *ZSliceCmd) String() string {
 
 func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		// Unsure of return value type.
-		if rd.Resp == 2 {
-			cmd.val = make([]Z, 0, n/2)
+		b, err := rd.NextType()
+		if err != nil {
+			return nil, err
+		}
+		array := b == proto.RespArray
+
+		if array {
+			cmd.val = make([]Z, n)
 		} else {
-			cmd.val = make([]Z, 0, n)
+			n /= 2
+			cmd.val = make([]Z, n)
 		}
 
 		for i := int64(0); i < n; i++ {
-			member, err := rd.ReadReply(func(rd *proto.Reader, _ byte, n2 int64) (interface{}, error) {
+			if array {
+				n2, err := rd.ReadArrayLen()
+				if err != nil {
+					return nil, err
+				}
 				if n2 != 2 {
 					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", n2)
 				}
-				return rd.ReadString()
-			})
+			}
+
+			member, err := rd.ReadString()
 			if err != nil {
 				return nil, err
 			}
@@ -1948,10 +1970,10 @@ func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
 				return nil, err
 			}
 
-			cmd.val = append(cmd.val, Z{
+			cmd.val[i] = Z{
 				Member: member,
 				Score:  score,
-			})
+			}
 		}
 		return nil, nil
 	})
@@ -2836,6 +2858,7 @@ func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
 
 	cmd.val = make([]map[string]string, n)
 	for i := 0; i < n; i++ {
+		i := i
 		_, err = rd.ReadMapReply(func(reader *proto.Reader, n int64) (interface{}, error) {
 			cmd.val[i] = make(map[string]string, n)
 
