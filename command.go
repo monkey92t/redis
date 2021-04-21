@@ -2868,20 +2868,20 @@ func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
 	cmd.val = make([]map[string]string, n)
 	for i := 0; i < n; i++ {
 		i := i
-		_, err = rd.ReadMapReply(func(reader *proto.Reader, n int64) (interface{}, error) {
-			cmd.val[i] = make(map[string]string, n)
+		_, err = rd.ReadMapReply(func(reader *proto.Reader, n2 int64) (interface{}, error) {
+			cmd.val[i] = make(map[string]string, n2)
+			for f := int64(0); f < n2; f++ {
+				k, err := rd.ReadString()
+				if err != nil {
+					return nil, err
+				}
 
-			k, err := rd.ReadString()
-			if err != nil {
-				return nil, err
+				v, err := rd.ReadString()
+				if err != nil {
+					return nil, err
+				}
+				cmd.val[i][k] = v
 			}
-
-			v, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-			cmd.val[i][k] = v
-
 			return nil, nil
 		})
 		if err != nil {
