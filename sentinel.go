@@ -317,8 +317,8 @@ func (c *SentinelClient) GetMasterAddrByName(ctx context.Context, name string) *
 	return cmd
 }
 
-func (c *SentinelClient) Sentinels(ctx context.Context, name string) *SliceCmd {
-	cmd := NewSliceCmd(ctx, "sentinel", "sentinels", name)
+func (c *SentinelClient) Sentinels(ctx context.Context, name string) *SliceMapStringInterfaceCmd {
+	cmd := NewSliceMapStringInterfaceCmd(ctx, "sentinel", "sentinels", name)
 	_ = c.Process(ctx, cmd)
 	return cmd
 }
@@ -665,17 +665,16 @@ func (c *sentinelFailover) discoverSentinels(ctx context.Context) {
 		return
 	}
 	for _, sentinel := range sentinels {
-		vals := sentinel.([]interface{})
-		var ip, port string
-		for i := 0; i < len(vals); i += 2 {
-			key := vals[i].(string)
-			switch key {
-			case "ip":
-				ip = vals[i+1].(string)
-			case "port":
-				port = vals[i+1].(string)
-			}
+		ipVal, ok := sentinel["ip"]
+		if !ok {
+			continue
 		}
+		portVal, ok := sentinel["port"]
+		if !ok {
+			continue
+		}
+
+		ip, port := ipVal.(string), portVal.(string)
 		if ip != "" && port != "" {
 			sentinelAddr := net.JoinHostPort(ip, port)
 			if !contains(c.sentinelAddrs, sentinelAddr) {
