@@ -1,7 +1,6 @@
 package redis_test
 
 import (
-	"context"
 	"io"
 	"net"
 	"sync"
@@ -15,16 +14,11 @@ import (
 
 var _ = Describe("PubSub", func() {
 	var client *redis.Client
-	var clientID int64
 
 	BeforeEach(func() {
 		opt := redisOptions()
 		opt.MinIdleConns = 0
 		opt.MaxConnAge = 0
-		opt.OnConnect = func(ctx context.Context, cn *redis.Conn) (err error) {
-			clientID, err = cn.ClientID(ctx).Result()
-			return err
-		}
 		client = redis.NewClient(opt)
 		Expect(client.FlushDB(ctx).Err()).NotTo(HaveOccurred())
 	})
