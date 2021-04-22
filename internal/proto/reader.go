@@ -57,7 +57,9 @@ type (
 )
 
 type Reader struct {
-	rd   *bufio.Reader
+	rd *bufio.Reader
+
+	// redis.RESP version
 	Resp int
 }
 
@@ -88,7 +90,7 @@ func (r *Reader) ReadLine() ([]byte, error) {
 	return r.readLine()
 }
 
-// NextType get the type of the next row of data.
+// NextType get the data type of the next row.
 func (r *Reader) NextType() (byte, error) {
 	b, err := r.rd.Peek(1)
 	if err != nil {

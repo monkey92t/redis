@@ -16,16 +16,56 @@ func BenchmarkReader_ParseReply_Int(b *testing.B) {
 	benchmarkParseReply(b, ":1\r\n", nil, false)
 }
 
+func BenchmarkReader_ParseReply_Float(b *testing.B) {
+	benchmarkParseReply(b, ",123.456\r\n", nil, false)
+}
+
+func BenchmarkReader_ParseReply_Bool(b *testing.B) {
+	benchmarkParseReply(b, "#t\r\n", nil, false)
+}
+
+func BenchmarkReader_ParseReply_BigInt(b *testing.B) {
+	benchmarkParseReply(b, "(3492890328409238509324850943850943825024385\r\n", nil, false)
+}
+
 func BenchmarkReader_ParseReply_Error(b *testing.B) {
 	benchmarkParseReply(b, "-Error message\r\n", nil, true)
+}
+
+func BenchmarkReader_ParseReply_Nil(b *testing.B) {
+	benchmarkParseReply(b, "_\r\n", nil, true)
+}
+
+func BenchmarkReader_ParseReply_BlobError(b *testing.B) {
+	benchmarkParseReply(b, "!21\r\nSYNTAX invalid syntax", nil, true)
 }
 
 func BenchmarkReader_ParseReply_String(b *testing.B) {
 	benchmarkParseReply(b, "$5\r\nhello\r\n", nil, false)
 }
 
+func BenchmarkReader_ParseReply_Verb(b *testing.B) {
+	benchmarkParseReply(b, "$9\r\ntxt:hello\r\n", nil, false)
+}
+
 func BenchmarkReader_ParseReply_Slice(b *testing.B) {
 	benchmarkParseReply(b, "*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n", aggregateBulkParse, false)
+}
+
+func BenchmarkReader_ParseReply_Set(b *testing.B) {
+	benchmarkParseReply(b, "~2\r\n$5\r\nhello\r\n$5\r\nworld\r\n", aggregateBulkParse, false)
+}
+
+func BenchmarkReader_ParseReply_Push(b *testing.B) {
+	benchmarkParseReply(b, ">2\r\n$5\r\nhello\r\n$5\r\nworld\r\n", aggregateBulkParse, false)
+}
+
+func BenchmarkReader_ParseReply_Map(b *testing.B) {
+	benchmarkParseReply(b, "%2\r\n$5\r\nhello\r\n$5\r\nworld\r\n+key\r\n+value\r\n", aggregateBulkParse, false)
+}
+
+func BenchmarkReader_ParseReply_Attr(b *testing.B) {
+	benchmarkParseReply(b, "%1\r\n+key\r\n+value\r\n+hello\r\n", aggregateBulkParse, false)
 }
 
 func TestReader_ReadLine(t *testing.T) {
