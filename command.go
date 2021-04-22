@@ -1009,12 +1009,12 @@ func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 
 		for i := 0; i < len(cmd.val); i++ {
 			if array {
-				n2, err := rd.ReadArrayLen()
+				nn, err := rd.ReadArrayLen()
 				if err != nil {
 					return nil, err
 				}
-				if n2 != 2 {
-					return nil, fmt.Errorf("got %d elements in key-value, expected 2", n2)
+				if nn != 2 {
+					return nil, fmt.Errorf("got %d elements in key-value, expected 2", nn)
 				}
 			}
 
@@ -1955,12 +1955,12 @@ func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 
 		for i := 0; i < len(cmd.val); i++ {
 			if array {
-				n2, err := rd.ReadArrayLen()
+				nn, err := rd.ReadArrayLen()
 				if err != nil {
 					return nil, err
 				}
-				if n2 != 2 {
-					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", n2)
+				if nn != 2 {
+					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", nn)
 				}
 			}
 
@@ -2863,9 +2863,9 @@ func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
 	cmd.val = make([]map[string]string, n)
 	for i := 0; i < n; i++ {
 		i := i
-		_, err = rd.ReadMapReply(func(reader *proto.Reader, n2 int64) (interface{}, error) {
-			cmd.val[i] = make(map[string]string, n2)
-			for f := int64(0); f < n2; f++ {
+		_, err = rd.ReadMapReply(func(reader *proto.Reader, nn int64) (interface{}, error) {
+			cmd.val[i] = make(map[string]string, nn)
+			for f := int64(0); f < nn; f++ {
 				k, err := rd.ReadString()
 				if err != nil {
 					return nil, err
