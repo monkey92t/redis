@@ -1404,25 +1404,20 @@ func (cmd *XStreamSliceCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadReply(func(rd *proto.Reader, typ byte, n int64) (interface{}, error) {
 		cmd.val = make([]XStream, n)
 
-		var stream string
 		for i := 0; i < len(cmd.val); i++ {
-			if typ == proto.RespMap {
-				var err error
-				stream, err = rd.ReadString()
+			if typ != proto.RespMap {
+				nn, err := rd.ReadArrayLen()
 				if err != nil {
 					return nil, err
 				}
-			} else {
-				v, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-					if n != 2 {
-						return nil, fmt.Errorf("got %d, wanted 2", n)
-					}
-					return rd.ReadString()
-				})
-				if err != nil {
-					return nil, err
+				if nn != 2 {
+					return nil, fmt.Errorf("got %d, wanted 2", nn)
 				}
-				stream = v.(string)
+			}
+
+			stream, err := rd.ReadString()
+			if err != nil {
+				return nil, err
 			}
 
 			msgs, err := readXMessageSlice(rd)
