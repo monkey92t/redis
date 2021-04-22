@@ -423,13 +423,13 @@ func (c statefulCmdable) Hello(ctx context.Context,
 	args = append(args, "hello", ver)
 	if password != "" {
 		if username != "" {
-			args = append(args, username, password)
+			args = append(args, "auth", username, password)
 		} else {
-			args = append(args, "default", password)
+			args = append(args, "auth", "default", password)
 		}
 	}
 	if clientName != "" {
-		args = append(args, clientName)
+		args = append(args, "setname", clientName)
 	}
 	cmd := NewMapStringInterfaceCmd(ctx, args...)
 	_ = c(ctx, cmd)
