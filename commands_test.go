@@ -52,13 +52,10 @@ var _ = Describe("Commands", func() {
 				pipe.Hello(ctx, 3, "", "", "")
 				return nil
 			})
-			Expect(err).To(Or(Not(HaveOccurred()), Equal(proto.RedisError("ERR unknown command 'hello'"))))
-
-			if err == nil {
-				m, err := cmds[0].(*redis.MapStringInterfaceCmd).Result()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(m["proto"]).To(Equal(int64(3)))
-			}
+			Expect(err).NotTo(HaveOccurred())
+			m, err := cmds[0].(*redis.MapStringInterfaceCmd).Result()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m["proto"]).To(Equal(int64(3)))
 		})
 
 		It("should Echo", func() {
