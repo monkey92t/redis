@@ -1953,7 +1953,7 @@ func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 			cmd.val = make([]Z, n)
 		}
 
-		for i := int64(0); i < n; i++ {
+		for i := 0; i < len(cmd.val); i++ {
 			if array {
 				n2, err := rd.ReadArrayLen()
 				if err != nil {
