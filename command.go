@@ -958,16 +958,16 @@ type KeyValue struct {
 	Value string
 }
 
-type SliceKeyValueCmd struct {
+type KeyValueSliceCmd struct {
 	baseCmd
 
 	val []KeyValue
 }
 
-var _ Cmder = (*SliceKeyValueCmd)(nil)
+var _ Cmder = (*KeyValueSliceCmd)(nil)
 
-func NewSliceKeyValueCmd(ctx context.Context, args ...interface{}) *SliceKeyValueCmd {
-	return &SliceKeyValueCmd{
+func NewKeyValueSliceCmd(ctx context.Context, args ...interface{}) *KeyValueSliceCmd {
+	return &KeyValueSliceCmd{
 		baseCmd: baseCmd{
 			ctx:  ctx,
 			args: args,
@@ -975,19 +975,19 @@ func NewSliceKeyValueCmd(ctx context.Context, args ...interface{}) *SliceKeyValu
 	}
 }
 
-func (cmd *SliceKeyValueCmd) Val() []KeyValue {
+func (cmd *KeyValueSliceCmd) Val() []KeyValue {
 	return cmd.val
 }
 
-func (cmd *SliceKeyValueCmd) Result() ([]KeyValue, error) {
+func (cmd *KeyValueSliceCmd) Result() ([]KeyValue, error) {
 	return cmd.val, cmd.err
 }
 
-func (cmd *SliceKeyValueCmd) String() string {
+func (cmd *KeyValueSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *SliceKeyValueCmd) readReply(rd *proto.Reader) error { // nolint: dupl
+func (cmd *KeyValueSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		if n == 0 {
 			cmd.val = make([]KeyValue, 0)
