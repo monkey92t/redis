@@ -91,8 +91,8 @@ func (r *Reader) ReadLine() ([]byte, error) {
 	return r.readLine()
 }
 
-// NextType get the data type of the next row.
-func (r *Reader) NextType() (byte, error) {
+// PeekReplyType returns the data type of the next response without advancing the Reader.
+func (r *Reader) PeekReplyType() (byte, error) {
 	b, err := r.rd.Peek(1)
 	if err != nil {
 		return 0, err
@@ -388,6 +388,34 @@ func (r *Reader) ReadMapReply(m MultiBulkParse) (interface{}, error) {
 	}
 }
 
+// ReadAggregateLen Read and return the length of RespArray/RespSet/RespPush/RespMap.
+// If it is of other types, it will return an error.
+func (r *Reader) ReadAggregateLen() (int, error) {
+	line, err := r.Pathfinder()
+	if err != nil {
+		return 0, err
+	}
+	switch line[0] {
+	case RespArray, RespSet, RespPush, RespMap:
+		return replyLen(line)
+	default:
+		return 0, fmt.Errorf("redis: can't parse array(array/set/push) reply: %.100q", line)
+	}
+}
+
+// ReadFixedArrayLen read fixed array length.
+func (r *Reader) ReadFixedArrayLen(fixedLen int) error {
+	n, err := r.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	if n != fixedLen {
+		return fmt.Errorf("redis: got %d elements of array length, wanted %d", n, fixedLen)
+	}
+	return nil
+}
+
+// ReadArrayLen Read and return the length of the array.
 func (r *Reader) ReadArrayLen() (int, error) {
 	line, err := r.Pathfinder()
 	if err != nil {
@@ -395,16 +423,28 @@ func (r *Reader) ReadArrayLen() (int, error) {
 	}
 	switch line[0] {
 	case RespArray, RespSet, RespPush:
-		n, err := replyLen(line)
-		if err != nil {
-			return 0, err
-		}
-		return n, nil
+		return replyLen(line)
 	default:
 		return 0, fmt.Errorf("redis: can't parse array(array/set/push) reply: %.100q", line)
 	}
 }
 
+// ReadFixedMapLen read fixed map length.
+func (r *Reader) ReadFixedMapLen(fixedLen int) error {
+	n, err := r.ReadMapLen()
+	if err != nil {
+		return err
+	}
+	if n != fixedLen {
+		return fmt.Errorf("redis: got %d elements of map length, wanted %d", n, fixedLen)
+	}
+	return nil
+}
+
+// ReadMapLen read the length of the map type.
+// If responding to the array type (RespArray/RespSet/RespPush),
+// it must be a multiple of 2 and return n/2.
+// Other types will return an error.
 func (r *Reader) ReadMapLen() (int, error) {
 	line, err := r.Pathfinder()
 	if err != nil {
@@ -412,15 +452,15 @@ func (r *Reader) ReadMapLen() (int, error) {
 	}
 	switch line[0] {
 	case RespMap:
+		return replyLen(line)
+	case RespArray, RespSet, RespPush:
+		// Some commands and RESP2 protocol may respond to array types.
 		n, err := replyLen(line)
 		if err != nil {
 			return 0, err
 		}
-		return n, nil
-	case RespArray, RespSet, RespPush:
-		n, err := replyLen(line)
-		if err != nil {
-			return 0, err
+		if n%2 != 0 {
+			return 0, fmt.Errorf("redis: the length of the array must be a multiple of 2, got: %d", n)
 		}
 		return n / 2, nil
 	default:

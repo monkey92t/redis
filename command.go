@@ -543,17 +543,17 @@ func (cmd *IntSliceCmd) String() string {
 }
 
 func (cmd *IntSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]int64, n)
-		for i := 0; i < len(cmd.val); i++ {
-			num, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-			cmd.val[i] = num
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]int64, n)
+	for i := 0; i < len(cmd.val); i++ {
+		cmd.val[i], err = rd.ReadInt()
+		if err != nil {
+			return err
 		}
-		return nil, nil
-	})
+	}
 	return err
 }
 
@@ -638,24 +638,18 @@ func (cmd *TimeCmd) String() string {
 }
 
 func (cmd *TimeCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if n != 2 {
-			return nil, fmt.Errorf("got %d elements, expected 2", n)
-		}
-
-		sec, err := rd.ReadInt()
-		if err != nil {
-			return nil, err
-		}
-
-		microsec, err := rd.ReadInt()
-		if err != nil {
-			return nil, err
-		}
-
-		cmd.val = time.Unix(sec, microsec*1000)
-		return nil, nil
-	})
+	if err := rd.ReadFixedArrayLen(2); err != nil {
+		return err
+	}
+	sec, err := rd.ReadInt()
+	if err != nil {
+		return err
+	}
+	microsec, err := rd.ReadInt()
+	if err != nil {
+		return err
+	}
+	cmd.val = time.Unix(sec, microsec*1000)
 	return err
 }
 
@@ -881,21 +875,23 @@ func (cmd *FloatSliceCmd) String() string {
 }
 
 func (cmd *FloatSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]float64, n)
-		for i := 0; i < len(cmd.val); i++ {
-			switch num, err := rd.ReadFloat(); {
-			case err == Nil:
-				cmd.val[i] = 0
-			case err != nil:
-				return nil, err
-			default:
-				cmd.val[i] = num
-			}
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+
+	cmd.val = make([]float64, n)
+	for i := 0; i < len(cmd.val); i++ {
+		switch num, err := rd.ReadFloat(); {
+		case err == Nil:
+			cmd.val[i] = 0
+		case err != nil:
+			return err
+		default:
+			cmd.val[i] = num
 		}
-		return nil, nil
-	})
-	return err
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -934,21 +930,22 @@ func (cmd *StringSliceCmd) ScanSlice(container interface{}) error {
 }
 
 func (cmd *StringSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]string, n)
-		for i := 0; i < len(cmd.val); i++ {
-			switch s, err := rd.ReadString(); {
-			case err == Nil:
-				cmd.val[i] = ""
-			case err != nil:
-				return nil, err
-			default:
-				cmd.val[i] = s
-			}
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]string, n)
+	for i := 0; i < len(cmd.val); i++ {
+		switch s, err := rd.ReadString(); {
+		case err == Nil:
+			cmd.val[i] = ""
+		case err != nil:
+			return err
+		default:
+			cmd.val[i] = s
 		}
-		return nil, nil
-	})
-	return err
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -987,55 +984,53 @@ func (cmd *KeyValueSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *KeyValueSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if n == 0 {
-			cmd.val = make([]KeyValue, 0)
-			return nil, nil
-		}
+func (cmd *KeyValueSliceCmd) readReply(rd *proto.Reader) error {
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
 
-		b, err := rd.NextType()
-		if err != nil {
-			return nil, err
-		}
-		array := b == proto.RespArray
+	// If the n is 0, you cannot continue to read the next byte.
+	if n == 0 {
+		cmd.val = make([]KeyValue, 0)
+		return nil
+	}
 
+	typ, err := rd.PeekReplyType()
+	if err != nil {
+		return err
+	}
+	array := typ == proto.RespArray
+
+	if array {
+		cmd.val = make([]KeyValue, n)
+	} else {
+		cmd.val = make([]KeyValue, n/2)
+	}
+
+	for i := 0; i < len(cmd.val); i++ {
 		if array {
-			cmd.val = make([]KeyValue, n)
-		} else {
-			n /= 2
-			cmd.val = make([]KeyValue, n)
-		}
-
-		for i := 0; i < len(cmd.val); i++ {
-			if array {
-				nn, err := rd.ReadArrayLen()
-				if err != nil {
-					return nil, err
-				}
-				if nn != 2 {
-					return nil, fmt.Errorf("got %d elements in key-value, expected 2", nn)
-				}
-			}
-
-			key, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			val, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			cmd.val[i] = KeyValue{
-				Key:   key,
-				Value: val,
+			if err = rd.ReadFixedArrayLen(2); err != nil {
+				return err
 			}
 		}
-		return nil, nil
-	})
-	return err
+
+		key, err := rd.ReadString()
+		if err != nil {
+			return err
+		}
+
+		val, err := rd.ReadString()
+		if err != nil {
+			return err
+		}
+
+		cmd.val[i] = KeyValue{
+			Key:   key,
+			Value: val,
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1070,18 +1065,19 @@ func (cmd *BoolSliceCmd) String() string {
 }
 
 func (cmd *BoolSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]bool, n)
-		for i := 0; i < len(cmd.val); i++ {
-			n, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-			cmd.val[i] = n == 1
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]bool, n)
+	for i := 0; i < len(cmd.val); i++ {
+		n, err := rd.ReadInt()
+		if err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+		cmd.val[i] = n == 1
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1137,24 +1133,26 @@ func (cmd *StringStringMapCmd) Scan(dst interface{}) error {
 }
 
 func (cmd *StringStringMapCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadMapReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make(map[string]string, n)
-		for i := int64(0); i < n; i++ {
-			key, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
+	n, err := rd.ReadMapLen()
+	if err != nil {
+		return err
+	}
 
-			value, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			cmd.val[key] = value
+	cmd.val = make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		key, err := rd.ReadString()
+		if err != nil {
+			return nil
 		}
-		return nil, nil
-	})
-	return err
+
+		value, err := rd.ReadString()
+		if err != nil {
+			return nil
+		}
+
+		cmd.val[key] = value
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1189,24 +1187,25 @@ func (cmd *StringIntMapCmd) String() string {
 }
 
 func (cmd *StringIntMapCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make(map[string]int64, n/2)
-		for i := int64(0); i < n; i += 2 {
-			key, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
+	n, err := rd.ReadMapLen()
+	if err != nil {
+		return err
+	}
 
-			n, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-
-			cmd.val[key] = n
+	cmd.val = make(map[string]int64, n)
+	for i := 0; i < n; i++ {
+		key, err := rd.ReadString()
+		if err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+
+		nn, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmd.val[key] = nn
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1241,18 +1240,20 @@ func (cmd *StringStructMapCmd) String() string {
 }
 
 func (cmd *StringStructMapCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make(map[string]struct{}, n)
-		for i := int64(0); i < n; i++ {
-			key, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-			cmd.val[key] = struct{}{}
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+
+	cmd.val = make(map[string]struct{}, n)
+	for i := 0; i < n; i++ {
+		key, err := rd.ReadString()
+		if err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+		cmd.val[key] = struct{}{}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1305,7 +1306,6 @@ func readXMessageSlice(rd *proto.Reader) ([]XMessage, error) {
 
 	msgs := make([]XMessage, n)
 	for i := 0; i < n; i++ {
-		var err error
 		msgs[i], err = readXMessage(rd)
 		if err != nil {
 			return nil, err
@@ -1315,12 +1315,8 @@ func readXMessageSlice(rd *proto.Reader) ([]XMessage, error) {
 }
 
 func readXMessage(rd *proto.Reader) (XMessage, error) {
-	n, err := rd.ReadArrayLen()
-	if err != nil {
+	if err := rd.ReadFixedArrayLen(2); err != nil {
 		return XMessage{}, err
-	}
-	if n != 2 {
-		return XMessage{}, fmt.Errorf("got %d, wanted 2", n)
 	}
 
 	id, err := rd.ReadString()
@@ -1328,27 +1324,27 @@ func readXMessage(rd *proto.Reader) (XMessage, error) {
 		return XMessage{}, err
 	}
 
-	var values map[string]interface{}
-
-	v, err := rd.ReadArrayReply(stringInterfaceMapParser)
+	v, err := stringInterfaceMapParser(rd)
 	if err != nil {
 		if err != proto.Nil {
 			return XMessage{}, err
 		}
-	} else {
-		values = v.(map[string]interface{})
 	}
 
 	return XMessage{
 		ID:     id,
-		Values: values,
+		Values: v,
 	}, nil
 }
 
-// stringInterfaceMapParser implements proto.MultiBulkParse.
-func stringInterfaceMapParser(rd *proto.Reader, n int64) (interface{}, error) {
-	m := make(map[string]interface{}, n/2)
-	for i := int64(0); i < n; i += 2 {
+func stringInterfaceMapParser(rd *proto.Reader) (map[string]interface{}, error) {
+	n, err := rd.ReadMapLen()
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]interface{}, n)
+	for i := 0; i < n; i++ {
 		key, err := rd.ReadString()
 		if err != nil {
 			return nil, err
@@ -1401,38 +1397,36 @@ func (cmd *XStreamSliceCmd) String() string {
 }
 
 func (cmd *XStreamSliceCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadReply(func(rd *proto.Reader, typ byte, n int64) (interface{}, error) {
-		cmd.val = make([]XStream, n)
+	typ, err := rd.PeekReplyType()
+	if err != nil {
+		return err
+	}
+	n, err := rd.ReadAggregateLen()
+	if err != nil {
+		return err
+	}
 
-		for i := 0; i < len(cmd.val); i++ {
-			if typ != proto.RespMap {
-				nn, err := rd.ReadArrayLen()
-				if err != nil {
-					return nil, err
-				}
-				if nn != 2 {
-					return nil, fmt.Errorf("got %d, wanted 2", nn)
-				}
-			}
-
-			stream, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			msgs, err := readXMessageSlice(rd)
-			if err != nil {
-				return nil, err
-			}
-
-			cmd.val[i] = XStream{
-				Stream:   stream,
-				Messages: msgs,
+	cmd.val = make([]XStream, n)
+	for i := 0; i < len(cmd.val); i++ {
+		if typ != proto.RespMap {
+			if err = rd.ReadFixedArrayLen(2); err != nil {
+				return err
 			}
 		}
-		return nil, nil
-	})
-	return err
+		stream, err := rd.ReadString()
+		if err != nil {
+			return err
+		}
+		msgs, err := readXMessageSlice(rd)
+		if err != nil {
+			return err
+		}
+		cmd.val[i] = XStream{
+			Stream:   stream,
+			Messages: msgs,
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1473,68 +1467,46 @@ func (cmd *XPendingCmd) String() string {
 }
 
 func (cmd *XPendingCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if n != 4 {
-			return nil, fmt.Errorf("got %d, wanted 4", n)
+	var err error
+	if err = rd.ReadFixedArrayLen(4); err != nil {
+		return err
+	}
+	cmd.val = &XPending{}
+
+	cmd.val.Count, err = rd.ReadInt()
+	if err != nil {
+		return err
+	}
+	cmd.val.Lower, err = rd.ReadString()
+	if err != nil && err != Nil {
+		return err
+	}
+	cmd.val.Higher, err = rd.ReadString()
+	if err != nil && err != Nil {
+		return err
+	}
+
+	n, err := rd.ReadArrayLen()
+	if err != nil && err != Nil {
+		return err
+	}
+	cmd.val.Consumers = make(map[string]int64, n)
+	for i := 0; i < n; i++ {
+		if err = rd.ReadFixedArrayLen(2); err != nil {
+			return err
 		}
 
-		count, err := rd.ReadInt()
+		consumerName, err := rd.ReadString()
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		lower, err := rd.ReadString()
-		if err != nil && err != Nil {
-			return nil, err
+		consumerPending, err := rd.ReadInt()
+		if err != nil {
+			return err
 		}
-
-		higher, err := rd.ReadString()
-		if err != nil && err != Nil {
-			return nil, err
-		}
-
-		cmd.val = &XPending{
-			Count:  count,
-			Lower:  lower,
-			Higher: higher,
-		}
-		_, err = rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-			for i := int64(0); i < n; i++ {
-				_, err = rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-					if n != 2 {
-						return nil, fmt.Errorf("got %d, wanted 2", n)
-					}
-
-					consumerName, err := rd.ReadString()
-					if err != nil {
-						return nil, err
-					}
-
-					consumerPending, err := rd.ReadInt()
-					if err != nil {
-						return nil, err
-					}
-
-					if cmd.val.Consumers == nil {
-						cmd.val.Consumers = make(map[string]int64)
-					}
-					cmd.val.Consumers[consumerName] = consumerPending
-
-					return nil, nil
-				})
-				if err != nil {
-					return nil, err
-				}
-			}
-			return nil, nil
-		})
-		if err != nil && err != Nil {
-			return nil, err
-		}
-
-		return nil, nil
-	})
-	return err
+		cmd.val.Consumers[consumerName] = consumerPending
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1575,49 +1547,46 @@ func (cmd *XPendingExtCmd) String() string {
 }
 
 func (cmd *XPendingExtCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]XPendingExt, 0, n)
-		for i := int64(0); i < n; i++ {
-			_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-				if n != 4 {
-					return nil, fmt.Errorf("got %d, wanted 4", n)
-				}
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]XPendingExt, n)
 
-				id, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-
-				consumer, err := rd.ReadString()
-				if err != nil && err != Nil {
-					return nil, err
-				}
-
-				idle, err := rd.ReadInt()
-				if err != nil && err != Nil {
-					return nil, err
-				}
-
-				retryCount, err := rd.ReadInt()
-				if err != nil && err != Nil {
-					return nil, err
-				}
-
-				cmd.val = append(cmd.val, XPendingExt{
-					ID:         id,
-					Consumer:   consumer,
-					Idle:       time.Duration(idle) * time.Millisecond,
-					RetryCount: retryCount,
-				})
-				return nil, nil
-			})
-			if err != nil {
-				return nil, err
-			}
+	for i := 0; i < len(cmd.val); i++ {
+		if err = rd.ReadFixedArrayLen(4); err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+
+		id, err := rd.ReadString()
+		if err != nil {
+			return err
+		}
+
+		consumer, err := rd.ReadString()
+		if err != nil && err != Nil {
+			return err
+		}
+
+		idle, err := rd.ReadInt()
+		if err != nil && err != Nil {
+			return err
+		}
+
+		retryCount, err := rd.ReadInt()
+		if err != nil && err != Nil {
+			return err
+		}
+
+		cmd.val[i] = XPendingExt{
+			ID:         id,
+			Consumer:   consumer,
+			Idle:       time.Duration(idle) * time.Millisecond,
+			RetryCount: retryCount,
+		}
+	}
+
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1661,7 +1630,6 @@ func (cmd *XInfoConsumersCmd) readReply(rd *proto.Reader) error {
 	if err != nil {
 		return err
 	}
-
 	cmd.val = make([]XInfoConsumer, n)
 
 	for i := 0; i < n; i++ {
@@ -1677,12 +1645,9 @@ func (cmd *XInfoConsumersCmd) readReply(rd *proto.Reader) error {
 func readXConsumerInfo(rd *proto.Reader) (XInfoConsumer, error) {
 	var consumer XInfoConsumer
 
-	n, err := rd.ReadMapLen()
+	err := rd.ReadFixedMapLen(3)
 	if err != nil {
 		return consumer, err
-	}
-	if n != 3 {
-		return consumer, fmt.Errorf("redis: got %d elements in XINFO CONSUMERS reply, wanted 3", n)
 	}
 
 	for i := 0; i < 3; i++ {
@@ -1858,49 +1823,40 @@ func (cmd *XInfoStreamCmd) String() string {
 }
 
 func (cmd *XInfoStreamCmd) readReply(rd *proto.Reader) error {
-	v, err := rd.ReadMapReply(xStreamInfoParser)
-	if err != nil {
+	if err := rd.ReadFixedMapLen(7); err != nil {
 		return err
 	}
-	cmd.val = v.(*XInfoStream)
-	return nil
-}
+	cmd.val = &XInfoStream{}
 
-func xStreamInfoParser(rd *proto.Reader, n int64) (interface{}, error) {
-	if n != 7 {
-		return nil, fmt.Errorf("redis: got %d elements in XINFO STREAM reply,"+
-			"wanted 7", n)
-	}
-	var info XInfoStream
 	for i := 0; i < 7; i++ {
 		key, err := rd.ReadString()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		switch key {
 		case "length":
-			info.Length, err = rd.ReadInt()
+			cmd.val.Length, err = rd.ReadInt()
 		case "radix-tree-keys":
-			info.RadixTreeKeys, err = rd.ReadInt()
+			cmd.val.RadixTreeKeys, err = rd.ReadInt()
 		case "radix-tree-nodes":
-			info.RadixTreeNodes, err = rd.ReadInt()
+			cmd.val.RadixTreeNodes, err = rd.ReadInt()
 		case "groups":
-			info.Groups, err = rd.ReadInt()
+			cmd.val.Groups, err = rd.ReadInt()
 		case "last-generated-id":
-			info.LastGeneratedID, err = rd.ReadString()
+			cmd.val.LastGeneratedID, err = rd.ReadString()
 		case "first-entry":
-			info.FirstEntry, err = readXMessage(rd)
+			cmd.val.FirstEntry, err = readXMessage(rd)
 		case "last-entry":
-			info.LastEntry, err = readXMessage(rd)
+			cmd.val.LastEntry, err = readXMessage(rd)
 		default:
-			return nil, fmt.Errorf("redis: unexpected content %s "+
+			return fmt.Errorf("redis: unexpected content %s "+
 				"in XINFO STREAM reply", key)
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return &info, nil
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -1934,54 +1890,54 @@ func (cmd *ZSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error { // nolint: dupl
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if n == 0 {
-			cmd.val = make([]Z, 0)
-			return nil, nil
-		}
-		b, err := rd.NextType()
-		if err != nil {
-			return nil, err
-		}
-		array := b == proto.RespArray
+func (cmd *ZSliceCmd) readReply(rd *proto.Reader) error {
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
 
+	// If the n is 0, cannot continue to read the next byte.
+	if n == 0 {
+		cmd.val = make([]Z, 0)
+		return nil
+	}
+
+	typ, err := rd.PeekReplyType()
+	if err != nil {
+		return err
+	}
+	array := typ == proto.RespArray
+
+	if array {
+		cmd.val = make([]Z, n)
+	} else {
+		cmd.val = make([]Z, n/2)
+	}
+
+	for i := 0; i < len(cmd.val); i++ {
 		if array {
-			cmd.val = make([]Z, n)
-		} else {
-			n /= 2
-			cmd.val = make([]Z, n)
-		}
-
-		for i := 0; i < len(cmd.val); i++ {
-			if array {
-				nn, err := rd.ReadArrayLen()
-				if err != nil {
-					return nil, err
-				}
-				if nn != 2 {
-					return nil, fmt.Errorf("got %d elements in sorted set zrange withScore, expected 2", nn)
-				}
-			}
-
-			member, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			score, err := rd.ReadFloat()
-			if err != nil {
-				return nil, err
-			}
-
-			cmd.val[i] = Z{
-				Member: member,
-				Score:  score,
+			if err = rd.ReadFixedArrayLen(2); err != nil {
+				return err
 			}
 		}
-		return nil, nil
-	})
-	return err
+
+		member, err := rd.ReadString()
+		if err != nil {
+			return err
+		}
+
+		score, err := rd.ReadFloat()
+		if err != nil {
+			return err
+		}
+
+		cmd.val[i] = Z{
+			Member: member,
+			Score:  score,
+		}
+	}
+
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -2016,32 +1972,26 @@ func (cmd *ZWithKeyCmd) String() string {
 }
 
 func (cmd *ZWithKeyCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		if n != 3 {
-			return nil, fmt.Errorf("got %d elements, expected 3", n)
-		}
+	var err error
+	if err = rd.ReadFixedArrayLen(3); err != nil {
+		return err
+	}
+	cmd.val = &ZWithKey{}
 
-		cmd.val = &ZWithKey{}
-		var err error
+	cmd.val.Key, err = rd.ReadString()
+	if err != nil {
+		return err
+	}
+	cmd.val.Member, err = rd.ReadString()
+	if err != nil {
+		return err
+	}
+	cmd.val.Score, err = rd.ReadFloat()
+	if err != nil {
+		return err
+	}
 
-		cmd.val.Key, err = rd.ReadString()
-		if err != nil {
-			return nil, err
-		}
-
-		cmd.val.Member, err = rd.ReadString()
-		if err != nil {
-			return nil, err
-		}
-
-		cmd.val.Score, err = rd.ReadFloat()
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
-	})
-	return err
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -2080,32 +2030,27 @@ func (cmd *ScanCmd) String() string {
 }
 
 func (cmd *ScanCmd) readReply(rd *proto.Reader) error {
-	n, err := rd.ReadArrayLen()
-	if err != nil {
+	if err := rd.ReadFixedArrayLen(2); err != nil {
 		return err
 	}
-	if n != 2 {
-		return fmt.Errorf("redis: got %d elements in scan reply, expected 2", n)
-	}
+
 	cursor, err := rd.ReadInt()
 	if err != nil {
 		return err
 	}
 	cmd.cursor = uint64(cursor)
 
-	n, err = rd.ReadArrayLen()
+	n, err := rd.ReadArrayLen()
 	if err != nil {
 		return err
 	}
-
 	cmd.page = make([]string, n)
 
-	for i := 0; i < n; i++ {
-		key, err := rd.ReadString()
+	for i := 0; i < len(cmd.page); i++ {
+		cmd.page[i], err = rd.ReadString()
 		if err != nil {
 			return err
 		}
-		cmd.page[i] = key
 	}
 	return nil
 }
@@ -2160,69 +2105,70 @@ func (cmd *ClusterSlotsCmd) String() string {
 }
 
 func (cmd *ClusterSlotsCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]ClusterSlot, n)
-		for i := 0; i < len(cmd.val); i++ {
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]ClusterSlot, n)
+
+	for i := 0; i < len(cmd.val); i++ {
+		n, err = rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		if n < 2 {
+			return fmt.Errorf("redis: got %d elements in cluster info, expected at least 2", n)
+		}
+
+		start, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+
+		end, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+
+		// subtract start and end.
+		nodes := make([]ClusterNode, n-2)
+		for j := 0; j < len(nodes); j++ {
 			n, err := rd.ReadArrayLen()
 			if err != nil {
-				return nil, err
+				return err
 			}
-			if n < 2 {
-				err := fmt.Errorf("redis: got %d elements in cluster info, expected at least 2", n)
-				return nil, err
+			if n != 2 && n != 3 {
+				return fmt.Errorf("got %d elements in cluster info address, expected 2 or 3", n)
 			}
 
-			start, err := rd.ReadInt()
+			ip, err := rd.ReadString()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			end, err := rd.ReadInt()
+			port, err := rd.ReadString()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			nodes := make([]ClusterNode, n-2)
-			for j := 0; j < len(nodes); j++ {
-				n, err := rd.ReadArrayLen()
+			nodes[j].Addr = net.JoinHostPort(ip, port)
+
+			if n == 3 {
+				id, err := rd.ReadString()
 				if err != nil {
-					return nil, err
+					return err
 				}
-				if n != 2 && n != 3 {
-					err := fmt.Errorf("got %d elements in cluster info address, expected 2 or 3", n)
-					return nil, err
-				}
-
-				ip, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-
-				port, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-
-				nodes[j].Addr = net.JoinHostPort(ip, port)
-
-				if n == 3 {
-					id, err := rd.ReadString()
-					if err != nil {
-						return nil, err
-					}
-					nodes[j].ID = id
-				}
-			}
-
-			cmd.val[i] = ClusterSlot{
-				Start: int(start),
-				End:   int(end),
-				Nodes: nodes,
+				nodes[j].ID = id
 			}
 		}
-		return nil, nil
-	})
-	return err
+		cmd.val[i] = ClusterSlot{
+			Start: int(start),
+			End:   int(end),
+			Nodes: nodes,
+		}
+	}
+
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -2825,16 +2771,16 @@ func (cmd *MapStringInterfaceCmd) readReply(rd *proto.Reader) error {
 
 //-----------------------------------------------------------------------
 
-type SliceMapStringStringCmd struct {
+type MapStringStringSliceCmd struct {
 	baseCmd
 
 	val []map[string]string
 }
 
-var _ Cmder = (*SliceMapStringStringCmd)(nil)
+var _ Cmder = (*MapStringStringSliceCmd)(nil)
 
-func NewSliceMapStringStringCmd(ctx context.Context, args ...interface{}) *SliceMapStringStringCmd {
-	return &SliceMapStringStringCmd{
+func NewMapStringStringSliceCmd(ctx context.Context, args ...interface{}) *MapStringStringSliceCmd {
+	return &MapStringStringSliceCmd{
 		baseCmd: baseCmd{
 			ctx:  ctx,
 			args: args,
@@ -2842,19 +2788,19 @@ func NewSliceMapStringStringCmd(ctx context.Context, args ...interface{}) *Slice
 	}
 }
 
-func (cmd *SliceMapStringStringCmd) Val() []map[string]string {
+func (cmd *MapStringStringSliceCmd) Val() []map[string]string {
 	return cmd.val
 }
 
-func (cmd *SliceMapStringStringCmd) Result() ([]map[string]string, error) {
+func (cmd *MapStringStringSliceCmd) Result() ([]map[string]string, error) {
 	return cmd.Val(), cmd.Err()
 }
 
-func (cmd *SliceMapStringStringCmd) String() string {
+func (cmd *MapStringStringSliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
-func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
+func (cmd *MapStringStringSliceCmd) readReply(rd *proto.Reader) error {
 	n, err := rd.ReadArrayLen()
 	if err != nil {
 		return err
@@ -2862,25 +2808,22 @@ func (cmd *SliceMapStringStringCmd) readReply(rd *proto.Reader) error {
 
 	cmd.val = make([]map[string]string, n)
 	for i := 0; i < n; i++ {
-		i := i
-		_, err = rd.ReadMapReply(func(reader *proto.Reader, nn int64) (interface{}, error) {
-			cmd.val[i] = make(map[string]string, nn)
-			for f := int64(0); f < nn; f++ {
-				k, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-
-				v, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-				cmd.val[i][k] = v
-			}
-			return nil, nil
-		})
+		nn, err := rd.ReadMapLen()
 		if err != nil {
 			return err
+		}
+		cmd.val[i] = make(map[string]string, nn)
+		for f := 0; f < nn; f++ {
+			k, err := rd.ReadString()
+			if err != nil {
+				return err
+			}
+
+			v, err := rd.ReadString()
+			if err != nil {
+				return err
+			}
+			cmd.val[i][k] = v
 		}
 	}
 	return nil
