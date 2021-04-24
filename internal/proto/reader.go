@@ -58,20 +58,12 @@ type (
 
 type Reader struct {
 	rd *bufio.Reader
-
-	// redis.RESP version
-	Resp int
 }
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
 		rd:   bufio.NewReader(rd),
-		Resp: 2,
 	}
-}
-
-func (r *Reader) SetResp(v int) {
-	r.Resp = v
 }
 
 func (r *Reader) Buffered() int {
@@ -86,18 +78,48 @@ func (r *Reader) Reset(rd io.Reader) {
 	r.rd.Reset(rd)
 }
 
-// ReadLine may return unexpected attribute types, it is best to use Pathfinder.
-func (r *Reader) ReadLine() ([]byte, error) {
-	return r.readLine()
-}
-
-// PeekReplyType returns the data type of the next response without advancing the Reader.
+// PeekReplyType returns the data type of the next response without advancing the Reader,
+// and it discards the attribute type.
 func (r *Reader) PeekReplyType() (byte, error) {
 	b, err := r.rd.Peek(1)
 	if err != nil {
 		return 0, err
 	}
 	return b[0], nil
+}
+
+// ReadLine Return a valid reply, it will check the protocol or redis error,
+// and filter the attribute type.
+func (r *Reader) ReadLine() ([]byte, error) {
+	line, err := r.readLine()
+	if err != nil {
+		return nil, err
+	}
+	switch line[0] {
+	case RespError:
+		return nil, ParseErrorReply(line)
+	case RespNil:
+		return nil, Nil
+	case RespBlobError:
+		var blobErr string
+		blobErr, err = r.readStringReply(line)
+		if err == nil {
+			err = RedisError(blobErr)
+		}
+		return nil, err
+	case RespAttr:
+		if err = r.Discard(line); err != nil {
+			return nil, err
+		}
+		return r.ReadLine()
+	}
+
+	// Compatible with RESP2
+	if IsNilReply(line) {
+		return nil, Nil
+	}
+
+	return line, nil
 }
 
 // readLine that returns an error if:
@@ -127,8 +149,8 @@ func (r *Reader) readLine() ([]byte, error) {
 	return b[:len(b)-2], nil
 }
 
-func (r *Reader) ReadReply(a AggregateBulkParse) (interface{}, error) {
-	line, err := r.Pathfinder()
+func (r *Reader) ReadSimpleReply() (interface{}, error) {
+	line, err := r.ReadLine()
 	if err != nil {
 		return nil, err
 	}
@@ -224,42 +246,8 @@ func (r *Reader) readVerb(line []byte) (string, error) {
 
 // -------------------------------
 
-// Pathfinder find up possible errors in redis responses and discard attributes types,
-// `line` that returns the true reply.
-func (r *Reader) Pathfinder() ([]byte, error) {
-	line, err := r.readLine()
-	if err != nil {
-		return nil, err
-	}
-	switch line[0] {
-	case RespError:
-		return nil, ParseErrorReply(line)
-	case RespNil:
-		return nil, Nil
-	case RespBlobError:
-		var blobErr string
-		blobErr, err = r.readStringReply(line)
-		if err == nil {
-			err = RedisError(blobErr)
-		}
-		return nil, err
-	case RespAttr:
-		if err = r.Discard(line); err != nil {
-			return nil, err
-		}
-		return r.Pathfinder()
-	}
-
-	// Compatible with RESP2
-	if IsNilReply(line) {
-		return nil, Nil
-	}
-
-	return line, nil
-}
-
 func (r *Reader) ReadInt() (int64, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return 0, err
 	}
@@ -286,7 +274,7 @@ func (r *Reader) ReadInt() (int64, error) {
 }
 
 func (r *Reader) ReadFloat() (float64, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return 0, err
 	}
@@ -306,7 +294,7 @@ func (r *Reader) ReadFloat() (float64, error) {
 }
 
 func (r *Reader) ReadString() (string, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return "", err
 	}
@@ -332,7 +320,7 @@ func (r *Reader) ReadString() (string, error) {
 }
 
 func (r *Reader) ReadAggregateReply(a AggregateBulkParse) (interface{}, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +337,7 @@ func (r *Reader) ReadAggregateReply(a AggregateBulkParse) (interface{}, error) {
 }
 
 func (r *Reader) ReadArrayReply(m MultiBulkParse) (interface{}, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +354,7 @@ func (r *Reader) ReadArrayReply(m MultiBulkParse) (interface{}, error) {
 }
 
 func (r *Reader) ReadMapReply(m MultiBulkParse) (interface{}, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +379,7 @@ func (r *Reader) ReadMapReply(m MultiBulkParse) (interface{}, error) {
 // ReadAggregateLen Read and return the length of RespArray/RespSet/RespPush/RespMap.
 // If it is of other types, it will return an error.
 func (r *Reader) ReadAggregateLen() (int, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return 0, err
 	}
@@ -417,7 +405,7 @@ func (r *Reader) ReadFixedArrayLen(fixedLen int) error {
 
 // ReadArrayLen Read and return the length of the array.
 func (r *Reader) ReadArrayLen() (int, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return 0, err
 	}
@@ -446,7 +434,7 @@ func (r *Reader) ReadFixedMapLen(fixedLen int) error {
 // it must be a multiple of 2 and return n/2.
 // Other types will return an error.
 func (r *Reader) ReadMapLen() (int, error) {
-	line, err := r.Pathfinder()
+	line, err := r.ReadLine()
 	if err != nil {
 		return 0, err
 	}

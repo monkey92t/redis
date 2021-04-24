@@ -315,7 +315,17 @@ func (cmd *Cmd) Bool() (bool, error) {
 	}
 }
 
-func (cmd *Cmd) readReply(rd *proto.Reader) (err error) {
+func (cmd *Cmd) readReply(rd *proto.Reader) error {
+	line, err := rd.ReadLine()
+	if err != nil {
+		return err
+	}
+
+	switch line[0] {
+	case
+	}
+
+
 	cmd.val, err = rd.ReadReply(aggregateParser)
 	return err
 }
@@ -329,8 +339,7 @@ func aggregateParser(rd *proto.Reader, typ byte, n int64) (interface{}, error) {
 	return sliceParser(rd, n)
 }
 
-// sliceParser implements proto.MultiBulkParse.
-func sliceParser(rd *proto.Reader, n int64) (interface{}, error) {
+func sliceParser(rd *proto.Reader) ([]interface{}, error) {
 	vals := make([]interface{}, n)
 	for i := 0; i < len(vals); i++ {
 		v, err := rd.ReadReply(aggregateParser)
@@ -2193,6 +2202,9 @@ type GeoRadiusQuery struct {
 	Sort      string
 	Store     string
 	StoreDist string
+
+	// WithCoord+WithDist+WithGeoHash
+	withLen int
 }
 
 type GeoLocationCmd struct {
@@ -2223,12 +2235,15 @@ func geoLocationArgs(q *GeoRadiusQuery, args ...interface{}) []interface{} {
 	}
 	if q.WithCoord {
 		args = append(args, "withcoord")
+		q.withLen++
 	}
 	if q.WithDist {
 		args = append(args, "withdist")
+		q.withLen++
 	}
 	if q.WithGeoHash {
 		args = append(args, "withhash")
+		q.withLen++
 	}
 	if q.Count > 0 {
 		args = append(args, "count", q.Count)
@@ -2260,80 +2275,59 @@ func (cmd *GeoLocationCmd) String() string {
 }
 
 func (cmd *GeoLocationCmd) readReply(rd *proto.Reader) error {
-	v, err := rd.ReadArrayReply(newGeoLocationSliceParser(cmd.q))
+	n, err := rd.ReadArrayLen()
 	if err != nil {
 		return err
 	}
-	cmd.locations = v.([]GeoLocation)
+	cmd.locations = make([]GeoLocation, n)
+
+	// only name
+	if cmd.q.withLen == 0 {
+		for i := 0; i < len(cmd.locations); i++ {
+			cmd.locations[i].Name, err = rd.ReadString()
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		for i := 0; i < len(cmd.locations); i++ {
+			if err = rd.ReadFixedArrayLen(cmd.q.withLen); err != nil {
+				return err
+			}
+
+			cmd.locations[i].Name, err = rd.ReadString()
+			if err != nil {
+				return err
+			}
+			if cmd.q.WithDist {
+				cmd.locations[i].Dist, err = rd.ReadFloat()
+				if err != nil {
+					return err
+				}
+			}
+			if cmd.q.WithGeoHash {
+				cmd.locations[i].GeoHash, err = rd.ReadInt()
+				if err != nil {
+					return err
+				}
+			}
+			if cmd.q.WithCoord {
+				if err = rd.ReadFixedArrayLen(2); err != nil {
+					return err
+				}
+				cmd.locations[i].Longitude, err = rd.ReadFloat()
+				if err != nil {
+					return err
+				}
+				cmd.locations[i].Latitude, err = rd.ReadFloat()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
-}
-
-func newGeoLocationSliceParser(q *GeoRadiusQuery) proto.MultiBulkParse {
-	return func(rd *proto.Reader, n int64) (interface{}, error) {
-		locs := make([]GeoLocation, 0, n)
-		for i := int64(0); i < n; i++ {
-			v, err := rd.ReadReply(newGeoLocationParser(q))
-			if err != nil {
-				return nil, err
-			}
-			switch vv := v.(type) {
-			case string:
-				locs = append(locs, GeoLocation{
-					Name: vv,
-				})
-			case *GeoLocation:
-				// TODO: avoid copying
-				locs = append(locs, *vv)
-			default:
-				return nil, fmt.Errorf("got %T, expected string or *GeoLocation", v)
-			}
-		}
-		return locs, nil
-	}
-}
-
-func newGeoLocationParser(q *GeoRadiusQuery) proto.AggregateBulkParse {
-	return func(rd *proto.Reader, _ byte, n int64) (interface{}, error) {
-		var loc GeoLocation
-		var err error
-
-		loc.Name, err = rd.ReadString()
-		if err != nil {
-			return nil, err
-		}
-		if q.WithDist {
-			loc.Dist, err = rd.ReadFloat()
-			if err != nil {
-				return nil, err
-			}
-		}
-		if q.WithGeoHash {
-			loc.GeoHash, err = rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-		}
-		if q.WithCoord {
-			n, err := rd.ReadArrayLen()
-			if err != nil {
-				return nil, err
-			}
-			if n != 2 {
-				return nil, fmt.Errorf("got %d coordinates, expected 2", n)
-			}
-
-			loc.Longitude, err = rd.ReadFloat()
-			if err != nil {
-				return nil, err
-			}
-			loc.Latitude, err = rd.ReadFloat()
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return &loc, nil
-	}
 }
 
 //------------------------------------------------------------------------------
@@ -2372,38 +2366,38 @@ func (cmd *GeoPosCmd) String() string {
 }
 
 func (cmd *GeoPosCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]*GeoPos, n)
-		for i := 0; i < len(cmd.val); i++ {
-			i := i
-			_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-				longitude, err := rd.ReadFloat()
-				if err != nil {
-					return nil, err
-				}
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]*GeoPos, n)
 
-				latitude, err := rd.ReadFloat()
-				if err != nil {
-					return nil, err
-				}
-
-				cmd.val[i] = &GeoPos{
-					Longitude: longitude,
-					Latitude:  latitude,
-				}
-				return nil, nil
-			})
-			if err != nil {
-				if err == Nil {
-					cmd.val[i] = nil
-					continue
-				}
-				return nil, err
+	for i := 0; i < len(cmd.val); i++ {
+		err = rd.ReadFixedArrayLen(2)
+		if err != nil {
+			if err == Nil {
+				cmd.val[i] = nil
+				continue
 			}
+			return err
 		}
-		return nil, nil
-	})
-	return err
+
+		longitude, err := rd.ReadFloat()
+		if err != nil {
+			return err
+		}
+		latitude, err := rd.ReadFloat()
+		if err != nil {
+			return err
+		}
+
+		cmd.val[i] = &GeoPos{
+			Longitude: longitude,
+			Latitude:  latitude,
+		}
+	}
+
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -2449,112 +2443,101 @@ func (cmd *CommandsInfoCmd) String() string {
 }
 
 func (cmd *CommandsInfoCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make(map[string]*CommandInfo, n)
-		for i := int64(0); i < n; i++ {
-			v, err := rd.ReadArrayReply(commandInfoParser)
-			if err != nil {
-				return nil, err
-			}
-			vv := v.(*CommandInfo)
-			cmd.val[vv.Name] = vv
-		}
-		return nil, nil
-	})
-	return err
-}
-
-func commandInfoParser(rd *proto.Reader, n int64) (interface{}, error) {
 	const numArgRedis5 = 6
 	const numArgRedis6 = 7
 
-	switch n {
-	case numArgRedis5, numArgRedis6:
-		// continue
-	default:
-		return nil, fmt.Errorf("redis: got %d elements in COMMAND reply, wanted 7", n)
-	}
-
-	var cmd CommandInfo
-	var err error
-
-	cmd.Name, err = rd.ReadString()
+	n, err := rd.ReadArrayLen()
 	if err != nil {
-		return nil, err
+		return err
 	}
+	cmd.val = make(map[string]*CommandInfo, n)
 
-	arity, err := rd.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	cmd.Arity = int8(arity)
+	for i := 0; i < len(cmd.val); i++ {
+		nn, err := rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		if nn != numArgRedis5 && nn != numArgRedis6 {
+			return fmt.Errorf("redis: got %d elements in COMMAND reply, wanted 6/7", nn)
+		}
 
-	_, err = rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.Flags = make([]string, n)
-		for i := 0; i < len(cmd.Flags); i++ {
+		cmdInfo := &CommandInfo{}
+		cmdInfo.Name, err = rd.ReadString()
+		if err != nil {
+			return err
+		}
+
+		arity, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmdInfo.Arity = int8(arity)
+
+		flagLen, err := rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		cmdInfo.Flags = make([]string, flagLen)
+		for f := 0; f < len(cmdInfo.Flags); f++ {
 			switch s, err := rd.ReadString(); {
 			case err == Nil:
-				cmd.Flags[i] = ""
+				cmdInfo.Flags[f] = ""
 			case err != nil:
-				return nil, err
+				return err
 			default:
-				cmd.Flags[i] = s
+				cmdInfo.Flags[f] = s
 			}
 		}
-		return nil, nil
-	})
-	if err != nil {
-		return nil, err
-	}
 
-	firstKeyPos, err := rd.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	cmd.FirstKeyPos = int8(firstKeyPos)
-
-	lastKeyPos, err := rd.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	cmd.LastKeyPos = int8(lastKeyPos)
-
-	stepCount, err := rd.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	cmd.StepCount = int8(stepCount)
-
-	for _, flag := range cmd.Flags {
-		if flag == "readonly" {
-			cmd.ReadOnly = true
-			break
+		firstKeyPos, err := rd.ReadInt()
+		if err != nil {
+			return err
 		}
-	}
+		cmdInfo.FirstKeyPos = int8(firstKeyPos)
 
-	if n == numArgRedis5 {
-		return &cmd, nil
-	}
+		lastKeyPos, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmdInfo.LastKeyPos = int8(lastKeyPos)
 
-	_, err = rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.ACLFlags = make([]string, n)
-		for i := 0; i < len(cmd.ACLFlags); i++ {
+		stepCount, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmdInfo.StepCount = int8(stepCount)
+
+		for _, flag := range cmdInfo.Flags {
+			if flag == "readonly" {
+				cmdInfo.ReadOnly = true
+				break
+			}
+		}
+
+		if n == numArgRedis5 {
+			continue
+		}
+
+		aclFlagLen, err := rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		cmdInfo.ACLFlags = make([]string, aclFlagLen)
+		for f := 0; f < len(cmdInfo.ACLFlags); f++ {
 			switch s, err := rd.ReadString(); {
 			case err == Nil:
-				cmd.ACLFlags[i] = ""
+				cmdInfo.ACLFlags[f] = ""
 			case err != nil:
-				return nil, err
+				return err
 			default:
-				cmd.ACLFlags[i] = s
+				cmdInfo.ACLFlags[f] = s
 			}
 		}
-		return nil, nil
-	})
-	if err != nil {
-		return nil, err
+
+		cmd.val[cmdInfo.Name] = cmdInfo
 	}
 
-	return &cmd, nil
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -2636,77 +2619,70 @@ func (cmd *SlowLogCmd) String() string {
 }
 
 func (cmd *SlowLogCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		cmd.val = make([]SlowLog, n)
-		for i := 0; i < len(cmd.val); i++ {
-			n, err := rd.ReadArrayLen()
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+	cmd.val = make([]SlowLog, n)
+
+	for i := 0; i < len(cmd.val); i++ {
+		nn, err := rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		if nn < 4 {
+			return fmt.Errorf("redis: got %d elements in slowlog get, expected at least 4", n)
+		}
+
+		cmd.val[i].ID, err = rd.ReadInt()
+		if err != nil {
+			return err
+		}
+
+		createdAt, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmd.val[i].Time = time.Unix(createdAt, 0)
+
+		costs, err := rd.ReadInt()
+		if err != nil {
+			return err
+		}
+		cmd.val[i].Duration = time.Duration(costs) * time.Microsecond
+
+		cmdLen, err := rd.ReadArrayLen()
+		if err != nil {
+			return err
+		}
+		if cmdLen < 1 {
+			return fmt.Errorf("redis: got %d elements commands reply in slowlog get, expected at least 1", cmdLen)
+		}
+
+		cmd.val[i].Args = make([]string, cmdLen)
+		for f := 0; f < cmdLen; f++ {
+			cmd.val[i].Args[f], err = rd.ReadString()
 			if err != nil {
-				return nil, err
-			}
-			if n < 4 {
-				err := fmt.Errorf("redis: got %d elements in slowlog get, expected at least 4", n)
-				return nil, err
-			}
-
-			id, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-
-			createdAt, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-			createdAtTime := time.Unix(createdAt, 0)
-
-			costs, err := rd.ReadInt()
-			if err != nil {
-				return nil, err
-			}
-			costsDuration := time.Duration(costs) * time.Microsecond
-
-			cmdLen, err := rd.ReadArrayLen()
-			if err != nil {
-				return nil, err
-			}
-			if cmdLen < 1 {
-				err := fmt.Errorf("redis: got %d elements commands reply in slowlog get, expected at least 1", cmdLen)
-				return nil, err
-			}
-
-			cmdString := make([]string, cmdLen)
-			for i := 0; i < cmdLen; i++ {
-				cmdString[i], err = rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			var address, name string
-			for i := 4; i < n; i++ {
-				str, err := rd.ReadString()
-				if err != nil {
-					return nil, err
-				}
-				if i == 4 {
-					address = str
-				} else if i == 5 {
-					name = str
-				}
-			}
-
-			cmd.val[i] = SlowLog{
-				ID:         id,
-				Time:       createdAtTime,
-				Duration:   costsDuration,
-				Args:       cmdString,
-				ClientAddr: address,
-				ClientName: name,
+				return err
 			}
 		}
-		return nil, nil
-	})
-	return err
+
+		if nn >= 5 {
+			cmd.val[i].ClientAddr, err = rd.ReadString()
+			if err != nil {
+				return err
+			}
+		}
+
+		if nn >= 6 {
+			cmd.val[i].ClientName, err = rd.ReadString()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 //-----------------------------------------------------------------------
