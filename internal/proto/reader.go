@@ -62,7 +62,7 @@ type Reader struct {
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
-		rd:   bufio.NewReader(rd),
+		rd: bufio.NewReader(rd),
 	}
 }
 
@@ -79,17 +79,22 @@ func (r *Reader) Reset(rd io.Reader) {
 }
 
 // PeekReplyType returns the data type of the next response without advancing the Reader,
-// and it discards the attribute type.
+// and discard the attribute type.
 func (r *Reader) PeekReplyType() (byte, error) {
 	b, err := r.rd.Peek(1)
 	if err != nil {
 		return 0, err
 	}
+	if b[0] == RespAttr {
+		if err = r.Discard(nil); err != nil {
+			return 0, err
+		}
+	}
 	return b[0], nil
 }
 
 // ReadLine Return a valid reply, it will check the protocol or redis error,
-// and filter the attribute type.
+// and discard the attribute type.
 func (r *Reader) ReadLine() ([]byte, error) {
 	line, err := r.readLine()
 	if err != nil {
@@ -149,6 +154,7 @@ func (r *Reader) readLine() ([]byte, error) {
 	return b[:len(b)-2], nil
 }
 
+// ReadSimpleReply read a single type of response, other types will return an error.
 func (r *Reader) ReadSimpleReply() (interface{}, error) {
 	line, err := r.ReadLine()
 	if err != nil {
@@ -166,27 +172,13 @@ func (r *Reader) ReadSimpleReply() (interface{}, error) {
 		return r.readBool(line)
 	case RespBigInt:
 		return r.readBigInt(line)
-	//--------
 
 	case RespString:
 		return r.readStringReply(line)
 	case RespVerb:
 		return r.readVerb(line)
-
-	//-----------
-
-	case RespArray, RespSet, RespPush, RespMap:
-		var n int
-		n, err = replyLen(line)
-		if err != nil {
-			return nil, err
-		}
-		if a == nil {
-			return nil, fmt.Errorf("redis: got %.100q, but multi bulk parser is nil", line)
-		}
-		return a(r, line[0], int64(n))
 	}
-	return nil, fmt.Errorf("redis: can't parse %.100q", line)
+	return nil, fmt.Errorf("redis: can't parse simple type: %q", line)
 }
 
 func (r *Reader) readFloat(line []byte) (float64, error) {
@@ -319,76 +311,15 @@ func (r *Reader) ReadString() (string, error) {
 	return "", fmt.Errorf("redis: can't parse reply=%.100q reading string", line)
 }
 
-func (r *Reader) ReadAggregateReply(a AggregateBulkParse) (interface{}, error) {
-	line, err := r.ReadLine()
+func (r *Reader) ReadBool() (bool, error) {
+	s, err := r.ReadString()
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	switch line[0] {
-	case RespArray, RespSet, RespPush, RespMap:
-		n, err := replyLen(line)
-		if err != nil {
-			return nil, err
-		}
-		return a(r, line[0], int64(n))
-	default:
-		return nil, fmt.Errorf("redis: can't parse aggregate(array/set/push/map) reply: %.100q", line)
+	if s == "OK" || s == "1" || s == "true" {
+		return true, nil
 	}
-}
-
-func (r *Reader) ReadArrayReply(m MultiBulkParse) (interface{}, error) {
-	line, err := r.ReadLine()
-	if err != nil {
-		return nil, err
-	}
-	switch line[0] {
-	case RespArray, RespSet, RespPush:
-		n, err := replyLen(line)
-		if err != nil {
-			return nil, err
-		}
-		return m(r, int64(n))
-	default:
-		return nil, fmt.Errorf("redis: can't parse array(array/set/push) reply: %.100q", line)
-	}
-}
-
-func (r *Reader) ReadMapReply(m MultiBulkParse) (interface{}, error) {
-	line, err := r.ReadLine()
-	if err != nil {
-		return nil, err
-	}
-	switch line[0] {
-	case RespMap:
-		n, err := replyLen(line)
-		if err != nil {
-			return nil, err
-		}
-		return m(r, int64(n))
-	case RespArray, RespSet, RespPush:
-		n, err := replyLen(line)
-		if err != nil {
-			return nil, err
-		}
-		return m(r, int64(n/2))
-	default:
-		return nil, fmt.Errorf("redis: can't parse map reply: %.100q", line)
-	}
-}
-
-// ReadAggregateLen Read and return the length of RespArray/RespSet/RespPush/RespMap.
-// If it is of other types, it will return an error.
-func (r *Reader) ReadAggregateLen() (int, error) {
-	line, err := r.ReadLine()
-	if err != nil {
-		return 0, err
-	}
-	switch line[0] {
-	case RespArray, RespSet, RespPush, RespMap:
-		return replyLen(line)
-	default:
-		return 0, fmt.Errorf("redis: can't parse array(array/set/push) reply: %.100q", line)
-	}
+	return false, fmt.Errorf("redis: can't parse reply=%.100q reading bool", s)
 }
 
 // ReadFixedArrayLen read fixed array length.
