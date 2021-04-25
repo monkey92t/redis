@@ -2425,7 +2425,7 @@ func (cmd *CommandsInfoCmd) readReply(rd *proto.Reader) error {
 		}
 		cmdInfo.StepCount = int8(stepCount)
 
-		if n == numArgRedis6 {
+		if nn == numArgRedis6 {
 			aclFlagLen, err := rd.ReadArrayLen()
 			if err != nil {
 				return err
