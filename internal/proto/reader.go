@@ -316,10 +316,7 @@ func (r *Reader) ReadBool() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if s == "OK" || s == "1" || s == "true" {
-		return true, nil
-	}
-	return false, fmt.Errorf("redis: can't parse reply=%.100q reading bool", s)
+	return s == "OK" || s == "1" || s == "true", nil
 }
 
 // ReadFixedArrayLen read fixed array length.
