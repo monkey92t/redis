@@ -2,7 +2,6 @@ package proto_test
 
 import (
 	"bytes"
-	"github.com/go-redis/redis/v8"
 	"io"
 	"testing"
 
@@ -93,76 +92,9 @@ func benchmarkParseReply(b *testing.B, reply string, wanterr bool) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := replyParse(p)
+		_, err := p.ReadReply()
 		if !wanterr && err != nil {
 			b.Fatal(err)
 		}
 	}
-}
-
-func replyParse(rd *proto.Reader) (interface{}, error) {
-	typ, err := rd.PeekReplyType()
-	if err != nil {
-		return nil, err
-	}
-	switch typ {
-	case proto.RespArray, proto.RespSet, proto.RespPush:
-		return sliceParser(rd)
-	case proto.RespMap:
-		return mapParse(rd)
-	default:
-		return rd.ReadSimpleReply()
-	}
-}
-
-func sliceParser(rd *proto.Reader) ([]interface{}, error) {
-	n, err := rd.ReadArrayLen()
-	if err != nil {
-		return nil, err
-	}
-	val := make([]interface{}, n)
-	for i := 0; i < len(val); i++ {
-		v, err := replyParse(rd)
-		if err != nil {
-			if err == redis.Nil {
-				val[i] = nil
-				continue
-			}
-			if err, ok := err.(proto.RedisError); ok {
-				val[i] = err
-				continue
-			}
-			return nil, err
-		}
-		val[i] = v
-	}
-	return val, nil
-}
-
-func mapParse(rd *proto.Reader) (map[interface{}]interface{}, error) {
-	n, err := rd.ReadMapLen()
-	if err != nil {
-		return nil, err
-	}
-	m := make(map[interface{}]interface{}, n)
-	for i := 0; i < n; i++ {
-		k, err := replyParse(rd)
-		if err != nil {
-			return nil, err
-		}
-		v, err := replyParse(rd)
-		if err != nil {
-			if err == redis.Nil {
-				m[k] = nil
-				continue
-			}
-			if err, ok := err.(proto.RedisError); ok {
-				m[k] = err
-				continue
-			}
-			return nil, err
-		}
-		m[k] = v
-	}
-	return m, nil
 }

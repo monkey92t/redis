@@ -316,75 +316,8 @@ func (cmd *Cmd) Bool() (bool, error) {
 }
 
 func (cmd *Cmd) readReply(rd *proto.Reader) (err error) {
-	cmd.val, err = replyParse(rd)
+	cmd.val, err = rd.ReadReply()
 	return err
-}
-
-func replyParse(rd *proto.Reader) (interface{}, error) {
-	typ, err := rd.PeekReplyType()
-	if err != nil {
-		return nil, err
-	}
-	switch typ {
-	case proto.RespArray, proto.RespSet, proto.RespPush:
-		return sliceParser(rd)
-	case proto.RespMap:
-		return mapParse(rd)
-	default:
-		return rd.ReadSimpleReply()
-	}
-}
-
-func sliceParser(rd *proto.Reader) ([]interface{}, error) {
-	n, err := rd.ReadArrayLen()
-	if err != nil {
-		return nil, err
-	}
-	val := make([]interface{}, n)
-	for i := 0; i < len(val); i++ {
-		v, err := replyParse(rd)
-		if err != nil {
-			if err == Nil {
-				val[i] = nil
-				continue
-			}
-			if err, ok := err.(proto.RedisError); ok {
-				val[i] = err
-				continue
-			}
-			return nil, err
-		}
-		val[i] = v
-	}
-	return val, nil
-}
-
-func mapParse(rd *proto.Reader) (map[interface{}]interface{}, error) {
-	n, err := rd.ReadMapLen()
-	if err != nil {
-		return nil, err
-	}
-	m := make(map[interface{}]interface{}, n)
-	for i := 0; i < n; i++ {
-		k, err := replyParse(rd)
-		if err != nil {
-			return nil, err
-		}
-		v, err := replyParse(rd)
-		if err != nil {
-			if err == Nil {
-				m[k] = nil
-				continue
-			}
-			if err, ok := err.(proto.RedisError); ok {
-				m[k] = err
-				continue
-			}
-			return nil, err
-		}
-		m[k] = v
-	}
-	return m, nil
 }
 
 //------------------------------------------------------------------------------
@@ -439,7 +372,7 @@ func (cmd *SliceCmd) Scan(dst interface{}) error {
 }
 
 func (cmd *SliceCmd) readReply(rd *proto.Reader) (err error) {
-	cmd.val, err = sliceParser(rd)
+	cmd.val, err = rd.ReadSlice()
 	return err
 }
 
@@ -2634,7 +2567,7 @@ func (cmd *MapStringInterfaceCmd) readReply(rd *proto.Reader) error {
 		if err != nil {
 			return err
 		}
-		v, err := replyParse(rd)
+		v, err := rd.ReadReply()
 		if err != nil {
 			if err == Nil {
 				cmd.val[k] = Nil
