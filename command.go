@@ -494,7 +494,7 @@ func (cmd *IntSliceCmd) readReply(rd *proto.Reader) error {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -590,7 +590,7 @@ func (cmd *TimeCmd) readReply(rd *proto.Reader) error {
 		return err
 	}
 	cmd.val = time.Unix(second, microsecond*1000)
-	return err
+	return nil
 }
 
 //------------------------------------------------------------------------------
