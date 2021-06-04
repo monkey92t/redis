@@ -4104,14 +4104,40 @@ var _ = Describe("Commands", func() {
 			Expect(id).To(Equal("3-0"))
 		})
 
+		// TODO remove in v9.
 		It("should XTrim", func() {
 			n, err := client.XTrim(ctx, "stream", 0).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(n).To(Equal(int64(3)))
 		})
 
+		// TODO remove in v9.
 		It("should XTrimApprox", func() {
 			n, err := client.XTrimApprox(ctx, "stream", 0).Result()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(int64(3)))
+		})
+
+		It("should XTrimMaxLen", func() {
+			n, err := client.XTrimMaxLen(ctx, "stream", 0).Result()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(int64(3)))
+		})
+
+		It("should XTrimMaxLenApprox", func() {
+			n, err := client.XTrimMaxLenApprox(ctx, "stream", 0, 2).Result()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(int64(2)))
+		})
+
+		It("should XTrimMaxLen", func() {
+			n, err := client.XTrimMaxLen(ctx, "stream", 0).Result()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(int64(3)))
+		})
+
+		It("should XTrimMaxLen", func() {
+			n, err := client.XTrimMaxLen(ctx, "stream", 0).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(n).To(Equal(int64(3)))
 		})
@@ -4380,8 +4406,14 @@ var _ = Describe("Commands", func() {
 				infoExt, err = client.XPendingExt(ctx, args).Result()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(infoExt).To(HaveLen(0))
+			})
 
-				n, err := client.XGroupDelConsumer(ctx, "stream", "group", "consumer").Result()
+			It("should XGroup Create Delete Consumer", func() {
+				n, err := client.XGroupCreateConsumer(ctx, "stream", "group", "c1").Result()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(n).To(Equal(1))
+
+				n, err = client.XGroupDelConsumer(ctx, "stream", "group", "consumer").Result()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(n).To(Equal(int64(3)))
 			})

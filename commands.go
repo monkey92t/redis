@@ -226,6 +226,7 @@ type Cmdable interface {
 	XGroupCreateMkStream(ctx context.Context, stream, group, start string) *StatusCmd
 	XGroupSetID(ctx context.Context, stream, group, start string) *StatusCmd
 	XGroupDestroy(ctx context.Context, stream, group string) *IntCmd
+	XGroupCreateConsumer(ctx context.Context, stream, group, consumer string) *IntCmd
 	XGroupDelConsumer(ctx context.Context, stream, group, consumer string) *IntCmd
 	XReadGroup(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd
 	XAck(ctx context.Context, stream, group string, ids ...string) *IntCmd
@@ -233,8 +234,14 @@ type Cmdable interface {
 	XPendingExt(ctx context.Context, a *XPendingExtArgs) *XPendingExtCmd
 	XClaim(ctx context.Context, a *XClaimArgs) *XMessageSliceCmd
 	XClaimJustID(ctx context.Context, a *XClaimArgs) *StringSliceCmd
+
+	// TODO: XTrim and XTrimApprox remove in v9.
 	XTrim(ctx context.Context, key string, maxLen int64) *IntCmd
 	XTrimApprox(ctx context.Context, key string, maxLen int64) *IntCmd
+	XTrimMaxLen(ctx context.Context, key string, maxLen int64) *IntCmd
+	XTrimMaxLenApprox(ctx context.Context, key string, maxLen, limit int64) *IntCmd
+	XTrimMinID(ctx context.Context, key string, minID string) *IntCmd
+	XTrimMinIDApprox(ctx context.Context, key string, minID string, limit int64) *IntCmd
 	XInfoGroups(ctx context.Context, key string) *XInfoGroupsCmd
 	XInfoStream(ctx context.Context, key string) *XInfoStreamCmd
 	XInfoConsumers(ctx context.Context, key string, group string) *XInfoConsumersCmd
@@ -1757,6 +1764,12 @@ func (c cmdable) XGroupDestroy(ctx context.Context, stream, group string) *IntCm
 	return cmd
 }
 
+func (c cmdable) XGroupCreateConsumer(ctx context.Context, stream, group, consumer string) *IntCmd {
+	cmd := NewIntCmd(ctx, "xgroup", "createconsumer", stream, group, consumer)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
 func (c cmdable) XGroupDelConsumer(ctx context.Context, stream, group, consumer string) *IntCmd {
 	cmd := NewIntCmd(ctx, "xgroup", "delconsumer", stream, group, consumer)
 	_ = c(ctx, cmd)
@@ -1881,16 +1894,53 @@ func xClaimArgs(a *XClaimArgs) []interface{} {
 	return args
 }
 
-func (c cmdable) XTrim(ctx context.Context, key string, maxLen int64) *IntCmd {
-	cmd := NewIntCmd(ctx, "xtrim", key, "maxlen", maxLen)
+// xTrim If approx is true, add the "~" parameter, otherwise it is the default "=" (redis default).
+// example:
+//		XTRIM key MAXLEN/MINID threshold LIMIT limit.
+//		XTRIM key MAXLEN/MINID ~ threshold LIMIT limit.
+// The redis-server version is lower than 6.2, please set limit to 0.
+func (c cmdable) xTrim(
+	ctx context.Context, key, strategy string,
+	approx bool, threshold interface{}, limit int64,
+) *IntCmd {
+	args := make([]interface{}, 0, 7)
+	args = append(args, "xtrim", key, strategy)
+	if approx {
+		args = append(args, "~")
+	}
+	args = append(args, threshold)
+	if limit > 0 {
+		args = append(args, "limit", limit)
+	}
+	cmd := NewIntCmd(ctx, args...)
 	_ = c(ctx, cmd)
 	return cmd
 }
 
+// Deprecated: use XTrimMaxLen, remove in v9.
+func (c cmdable) XTrim(ctx context.Context, key string, maxLen int64) *IntCmd {
+	return c.xTrim(ctx, key, "maxlen", false, maxLen, 0)
+}
+
+// Deprecated: use XTrimMaxLenApprox, remove in v9.
 func (c cmdable) XTrimApprox(ctx context.Context, key string, maxLen int64) *IntCmd {
-	cmd := NewIntCmd(ctx, "xtrim", key, "maxlen", "~", maxLen)
-	_ = c(ctx, cmd)
-	return cmd
+	return c.xTrim(ctx, key, "maxlen", true, maxLen, 0)
+}
+
+func (c cmdable) XTrimMaxLen(ctx context.Context, key string, maxLen int64) *IntCmd {
+	return c.xTrim(ctx, key, "maxlen", false, maxLen, 0)
+}
+
+func (c cmdable) XTrimMaxLenApprox(ctx context.Context, key string, maxLen, limit int64) *IntCmd {
+	return c.xTrim(ctx, key, "maxlen", true, maxLen, limit)
+}
+
+func (c cmdable) XTrimMinID(ctx context.Context, key string, minID string) *IntCmd {
+	return c.xTrim(ctx, key, "minid", false, minID, 0)
+}
+
+func (c cmdable) XTrimMinIDApprox(ctx context.Context, key string, minID string, limit int64) *IntCmd {
+	return c.xTrim(ctx, key, "minid", true, minID, limit)
 }
 
 func (c cmdable) XInfoConsumers(ctx context.Context, key string, group string) *XInfoConsumersCmd {
