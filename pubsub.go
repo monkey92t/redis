@@ -49,13 +49,6 @@ func (c *PubSub) String() string {
 	return fmt.Sprintf("PubSub(%s)", strings.Join(channels, ", "))
 }
 
-func (c *PubSub) connWithLock(ctx context.Context) (*pool.Conn, error) {
-	c.mu.Lock()
-	cn, err := c.conn(ctx, nil)
-	c.mu.Unlock()
-	return cn, err
-}
-
 func (c *PubSub) conn(ctx context.Context, newChannels []string) (*pool.Conn, error) {
 	if c.closed {
 		return nil, pool.ErrClosed
@@ -124,17 +117,6 @@ func (c *PubSub) _subscribe(
 	}
 	cmd := NewSliceCmd(ctx, args...)
 	return c.writeCmd(ctx, cn, cmd)
-}
-
-func (c *PubSub) releaseConnWithLock(
-	ctx context.Context,
-	cn *pool.Conn,
-	err error,
-	allowTimeout bool,
-) {
-	c.mu.Lock()
-	c.releaseConn(ctx, cn, err, allowTimeout)
-	c.mu.Unlock()
 }
 
 func (c *PubSub) releaseConn(ctx context.Context, cn *pool.Conn, err error, allowTimeout bool) {
