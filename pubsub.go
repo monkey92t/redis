@@ -252,13 +252,16 @@ func (c *PubSub) Ping(ctx context.Context, payload ...string) error {
 	}
 	cmd := NewCmd(ctx, args...)
 
-	cn, err := c.connWithLock(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cn, err := c.conn(ctx, nil)
 	if err != nil {
 		return err
 	}
 
 	err = c.writeCmd(ctx, cn, cmd)
-	c.releaseConnWithLock(ctx, cn, err, false)
+	c.releaseConn(ctx, cn, err, false)
 	return err
 }
 
@@ -357,11 +360,14 @@ func (c *PubSub) newMessage(reply interface{}) (interface{}, error) {
 // is not received in time. This is low-level API and in most cases
 // Channel should be used instead.
 func (c *PubSub) ReceiveTimeout(ctx context.Context, timeout time.Duration) (interface{}, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.cmd == nil {
 		c.cmd = NewCmd(ctx)
 	}
 
-	cn, err := c.connWithLock(ctx)
+	cn, err := c.conn(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +376,7 @@ func (c *PubSub) ReceiveTimeout(ctx context.Context, timeout time.Duration) (int
 		return c.cmd.readReply(rd)
 	})
 
-	c.releaseConnWithLock(ctx, cn, err, timeout > 0)
+	c.releaseConn(ctx, cn, err, false)
 	if err != nil {
 		return nil, err
 	}
