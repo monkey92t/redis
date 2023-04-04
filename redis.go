@@ -824,3 +824,9 @@ type PoolConn = pool.Conn
 func (c *Client) NewConn(ctx context.Context) (*PoolConn, error) {
 	return c.newConn(ctx)
 }
+
+func (c *Conn) WithReader(ctx context.Context, cmd Cmder) error {
+	return c.withConn(ctx, func(ctx context.Context, conn *pool.Conn) error {
+		return conn.WithReader(ctx, c.cmdTimeout(cmd), cmd.readReply)
+	})
+}
