@@ -819,6 +819,8 @@ func (c *Conn) TxPipeline() Pipeliner {
 
 // --------------------------------------------------------------------------
 
-func (c *Client) NewConn(ctx context.Context) (*pool.Conn, error) {
+type PoolConn = pool.Conn
+
+func (c *Client) NewConn(ctx context.Context) (*PoolConn, error) {
 	return c.newConn(ctx)
 }
