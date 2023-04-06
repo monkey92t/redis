@@ -819,17 +819,20 @@ func (c *Conn) TxPipeline() Pipeliner {
 
 // --------------------------------------------------------------------------
 
-type PoolConn = pool.Conn
+type (
+	PoolConn    = pool.Conn
+	ProtoReader = proto.Reader
+)
 
 func (c *Client) NewConn(ctx context.Context) (*PoolConn, error) {
 	return c.newConn(ctx)
 }
 
-func (c *Conn) ReadReply(ctx context.Context, fn func(rd *proto.Reader) error) error {
+func (c *Conn) ReadReply(ctx context.Context, fn func(rd *ProtoReader) error) error {
 	return c.ReadReplyWithTimeout(ctx, 0, fn)
 }
 
-func (c *Conn) ReadReplyWithTimeout(ctx context.Context, timeout time.Duration, fn func(rd *proto.Reader) error) error {
+func (c *Conn) ReadReplyWithTimeout(ctx context.Context, timeout time.Duration, fn func(rd *ProtoReader) error) error {
 	return c.withConn(ctx, func(ctx context.Context, conn *pool.Conn) error {
 		return conn.WithReader(ctx, timeout, fn)
 	})
