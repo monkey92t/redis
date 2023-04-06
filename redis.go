@@ -822,6 +822,7 @@ func (c *Conn) TxPipeline() Pipeliner {
 type (
 	PoolConn    = pool.Conn
 	ProtoReader = proto.Reader
+	RedisError  = proto.RedisError
 )
 
 func (c *Client) NewConn(ctx context.Context) (*PoolConn, error) {
