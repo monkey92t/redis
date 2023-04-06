@@ -825,12 +825,12 @@ func (c *Client) NewConn(ctx context.Context) (*PoolConn, error) {
 	return c.newConn(ctx)
 }
 
-func (c *Conn) ReadReply(ctx context.Context, cmd Cmder) error {
-	return c.ReadReplyWithTimeout(ctx, cmd, 0)
+func (c *Conn) ReadReply(ctx context.Context, fn func(rd *proto.Reader) error) error {
+	return c.ReadReplyWithTimeout(ctx, 0, fn)
 }
 
-func (c *Conn) ReadReplyWithTimeout(ctx context.Context, cmd Cmder, timeout time.Duration) error {
+func (c *Conn) ReadReplyWithTimeout(ctx context.Context, timeout time.Duration, fn func(rd *proto.Reader) error) error {
 	return c.withConn(ctx, func(ctx context.Context, conn *pool.Conn) error {
-		return conn.WithReader(ctx, timeout, cmd.readReply)
+		return conn.WithReader(ctx, timeout, fn)
 	})
 }
