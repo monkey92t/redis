@@ -32,21 +32,21 @@ type plugin struct {
 	postInitConnPlugin []PostInitConnPlugin
 }
 
-// RegistryPreInitConnPlugin register a PreInitConnPlugin plugin, which can be registered
+// RegisterPreInitConnPlugin registers a PreInitConnPlugin plugin, which can be registered
 // multiple times. It will be executed in the order of registration.
-func (p *plugin) RegistryPreInitConnPlugin(pre PreInitConnPlugin) {
+func (p *plugin) RegisterPreInitConnPlugin(pre PreInitConnPlugin) {
 	p.preInitConnPlugins = append(p.preInitConnPlugins, pre)
 }
 
-// RegistryInitConnPlugin register an InitConnPlugin plugin, which will override the default
+// RegisterInitConnPlugin registers an InitConnPlugin plugin, which will override the default
 // authentication mechanism of go-redis. If registered multiple times, only the plugin
 // registered last will be executed.
-func (p *plugin) RegistryInitConnPlugin(init InitConnPlugin) {
+func (p *plugin) RegisterInitConnPlugin(init InitConnPlugin) {
 	p.initConnPlugin = init
 }
 
-// RegistryPostInitConnPlugin register a PostInitConnPlugin plugin, which can be registered
+// RegisterPostInitConnPlugin registers a PostInitConnPlugin plugin, which can be registered
 // multiple times. It will be executed in the order of registration.
-func (p *plugin) RegistryPostInitConnPlugin(post PostInitConnPlugin) {
+func (p *plugin) RegisterPostInitConnPlugin(post PostInitConnPlugin) {
 	p.postInitConnPlugin = append(p.postInitConnPlugin, post)
 }
