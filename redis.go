@@ -838,3 +838,12 @@ func (c *Conn) ReadReplyWithTimeout(ctx context.Context, timeout time.Duration, 
 		return conn.WithReader(ctx, timeout, fn)
 	})
 }
+
+// WriteCmd only write cmd, do not read response
+func (c *Conn) WriteCmd(ctx context.Context, cmd Cmder) error {
+	return c.withConn(ctx, func(ctx context.Context, conn *pool.Conn) error {
+		return conn.WithWriter(c.context(ctx), c.opt.WriteTimeout, func(wr *proto.Writer) error {
+			return writeCmd(wr, cmd)
+		})
+	})
+}
