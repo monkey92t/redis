@@ -314,7 +314,7 @@ func (r *Reader) ReadInt() (int64, error) {
 			return 0, err
 		}
 		if !b.IsInt64() {
-			return 0, fmt.Errorf("bigInt(%s) value out of range", b.String())
+			return 0, fmt.Errorf("redis: bigInt(%s) value out of range", b.String())
 		}
 		return b.Int64(), nil
 	}
