@@ -45,7 +45,6 @@ func TestCreate(t *testing.T) {
 	query := `CREATE (:pod {id:"x1", name:"pod1", ts: 10240, alive: true, fv: 3.1415926})`
 	if err := rdb.GraphQuery(ctx, key, query).Err(); err != nil {
 		t.Fatal(err)
-		log.Fatal()
 	}
 
 	query = `CREATE (:pod {id:"x2", name:"pod2", ts: 10241, alive: true, fv: 3.1415927})`
