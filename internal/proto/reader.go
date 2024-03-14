@@ -54,14 +54,12 @@ func ParseErrorReply(line []byte) error {
 
 type Reader struct {
 	rd   *bufio.Reader
-	conn io.Reader
 	buff []byte
 }
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
 		rd:   bufio.NewReader(rd),
-		conn: rd,
 		buff: make([]byte, 0, 512),
 	}
 }
@@ -531,7 +529,7 @@ func (r *Reader) Discard(line []byte) (err error) {
 // ReadBytes to read raw RESP data.
 func (r *Reader) ReadBytes() ([]byte, error) {
 	for {
-		n, err := r.conn.Read(r.buff[len(r.buff):cap(r.buff)])
+		n, err := r.rd.Read(r.buff[len(r.buff):cap(r.buff)])
 		r.buff = r.buff[:len(r.buff)+n]
 		if err != nil {
 			if err != io.EOF {
