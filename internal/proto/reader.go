@@ -53,12 +53,16 @@ func ParseErrorReply(line []byte) error {
 //------------------------------------------------------------------------------
 
 type Reader struct {
-	rd *bufio.Reader
+	rd   *bufio.Reader
+	conn io.Reader
+	buff []byte
 }
 
 func NewReader(rd io.Reader) *Reader {
 	return &Reader{
-		rd: bufio.NewReader(rd),
+		rd:   bufio.NewReader(rd),
+		conn: rd,
+		buff: make([]byte, 0, 512),
 	}
 }
 
@@ -522,6 +526,27 @@ func (r *Reader) Discard(line []byte) (err error) {
 	}
 
 	return fmt.Errorf("redis: can't parse %.100q", line)
+}
+
+// ReadBytes to read raw RESP data.
+func (r *Reader) ReadBytes() ([]byte, error) {
+	for {
+		n, err := r.conn.Read(r.buff[len(r.buff):cap(r.buff)])
+		r.buff = r.buff[:len(r.buff)+n]
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+			b := make([]byte, len(r.buff))
+			copy(b, r.buff)
+			r.buff = r.buff[:0]
+			return b, nil
+		}
+
+		if len(r.buff) == cap(r.buff) {
+			r.buff = append(r.buff, 0)[:len(r.buff)]
+		}
+	}
 }
 
 func replyLen(line []byte) (n int, err error) {

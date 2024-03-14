@@ -5761,3 +5761,43 @@ func (cmd *GraphCmd) readStringArray(rd *proto.Reader) ([]string, error) {
 	}
 	return ss, nil
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+type BytesCmd struct {
+	baseCmd
+
+	val []byte
+}
+
+var _ Cmder = (*BytesCmd)(nil)
+
+func NewBytesCmd(ctx context.Context, args ...any) *BytesCmd {
+	return &BytesCmd{
+		baseCmd: baseCmd{
+			ctx:  ctx,
+			args: args,
+		},
+	}
+}
+
+func (cmd *BytesCmd) SetVal(val []byte) {
+	cmd.val = val
+}
+
+func (cmd *BytesCmd) Val() []byte {
+	return cmd.val
+}
+
+func (cmd *BytesCmd) Result() ([]byte, error) {
+	return cmd.val, cmd.err
+}
+
+func (cmd *BytesCmd) String() string {
+	return cmdString(cmd, cmd.val)
+}
+
+func (cmd *BytesCmd) readReply(rd *proto.Reader) error {
+	cmd.val, cmd.err = rd.ReadBytes()
+	return cmd.err
+}
