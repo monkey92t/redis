@@ -528,23 +528,95 @@ func (r *Reader) Discard(line []byte) (err error) {
 
 // ReadBytes to read raw RESP data.
 func (r *Reader) ReadBytes() ([]byte, error) {
-	for {
-		n, err := r.rd.Read(r.buff[len(r.buff):cap(r.buff)])
-		r.buff = r.buff[:len(r.buff)+n]
-		if err != nil {
-			if err != io.EOF {
-				return nil, err
-			}
-			b := make([]byte, len(r.buff))
-			copy(b, r.buff)
-			r.buff = r.buff[:0]
-			return b, nil
-		}
-
-		if len(r.buff) == cap(r.buff) {
-			r.buff = append(r.buff, 0)[:len(r.buff)]
-		}
+	if err := r.readBytes(); err != nil {
+		return nil, err
 	}
+	b := make([]byte, len(r.buff))
+	copy(b, r.buff)
+	r.buff = r.buff[:0]
+	return b, nil
+}
+
+func (r *Reader) readBytes() error {
+	peek, err := r.rd.Peek(1)
+	if err != nil {
+		return err
+	}
+	typ := peek[0]
+
+	switch typ {
+	case RespStatus, RespError, RespInt, RespFloat, RespBool, RespBigInt, RespNil:
+		line, err := r.readLine()
+		if err != nil {
+			return err
+		}
+		r.buff = append(r.buff, line...)
+		r.buff = append(r.buff, '\r', '\n')
+	case RespString, RespBlobError, RespVerbatim:
+		n, err := r.readBytesLen()
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			b := make([]byte, n+2)
+			_, err = io.ReadFull(r.rd, b)
+			if err != nil {
+				return err
+			}
+			r.buff = append(r.buff, b...)
+		} else if n == 0 {
+			r.buff = append(r.buff, '\r', '\n')
+		}
+	case RespArray, RespSet, RespPush:
+		n, err := r.readBytesLen()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err = r.readBytes(); err != nil {
+				return err
+			}
+		}
+	case RespMap, RespAttr:
+		n, err := r.readBytesLen()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n*2; i++ {
+			if err = r.readBytes(); err != nil {
+				return err
+			}
+		}
+		if typ == RespAttr {
+			if err = r.readBytes(); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("redis: can't parse %q", typ)
+	}
+	return nil
+}
+
+func (r *Reader) readBytesLen() (int, error) {
+	line, err := r.readLine()
+	if err != nil {
+		return 0, err
+	}
+	n, err := util.Atoi(line[1:])
+	if err != nil {
+		return 0, err
+	}
+
+	if n < -1 {
+		return 0, fmt.Errorf("redis: invalid reply: %q", line)
+	}
+	if err != nil {
+		return 0, err
+	}
+	r.buff = append(r.buff, line...)
+	r.buff = append(r.buff, '\r', '\n')
+	return n, nil
 }
 
 func replyLen(line []byte) (n int, err error) {

@@ -98,3 +98,79 @@ func benchmarkParseReply(b *testing.B, reply string, wanterr bool) {
 		}
 	}
 }
+
+//RespStatus    = '+' // +<string>\r\n
+//RespError     = '-' // -<string>\r\n
+//RespString    = '$' // $<length>\r\n<bytes>\r\n
+//RespInt       = ':' // :<number>\r\n
+//RespNil       = '_' // _\r\n
+//RespFloat     = ',' // ,<floating-point-number>\r\n (golang float)
+//RespBool      = '#' // true: #t\r\n false: #f\r\n
+//RespBlobError = '!' // !<length>\r\n<bytes>\r\n
+//RespVerbatim  = '=' // =<length>\r\nFORMAT:<bytes>\r\n
+//RespBigInt    = '(' // (<big number>\r\n
+//RespArray     = '*' // *<len>\r\n... (same as resp2)
+//RespMap       = '%' // %<len>\r\n(key)\r\n(value)\r\n... (golang map)
+//RespSet       = '~' // ~<len>\r\n... (same as Array)
+//RespAttr      = '|' // |<len>\r\n(key)\r\n(value)\r\n... + command reply
+//RespPush      = '>' // ><len>\r\n... (same as Array)
+
+func TestReadBytes(t *testing.T) {
+	// status
+	testReadBytes(t, []byte("+OK\r\n"))
+
+	// error
+	testReadBytes(t, []byte("-Error message\r\n"))
+
+	// string
+	testReadBytes(t, []byte("$5\r\nhello\r\n"))
+
+	// int
+	testReadBytes(t, []byte(":1\r\n"))
+
+	// nil
+	testReadBytes(t, []byte("_\r\n"))
+
+	// float
+	testReadBytes(t, []byte(",123.456\r\n"))
+
+	// bool
+	testReadBytes(t, []byte("#t\r\n"))
+
+	// blob error
+	testReadBytes(t, []byte("!21\r\nSYNTAX invalid syntax\r\n"))
+
+	// verbatim
+	testReadBytes(t, []byte("=12\r\nFORMAT:hello\r\n"))
+
+	// big int
+	testReadBytes(t, []byte("(3492890328409238509324850943850943825024385\r\n"))
+
+	// array
+	testReadBytes(t, []byte("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n"))
+
+	// map
+	testReadBytes(t, []byte("%2\r\n$5\r\nhello\r\n$5\r\nworld\r\n+key\r\n+value\r\n"))
+
+	// set
+	testReadBytes(t, []byte("~2\r\n$5\r\nhello\r\n$5\r\nworld\r\n"))
+
+	// push
+	testReadBytes(t, []byte(">2\r\n$5\r\nhello\r\n$5\r\nworld\r\n"))
+
+	// attr
+	testReadBytes(t, []byte("|1\r\n+key\r\n+value\r\n+hello\r\n"))
+
+	// 复杂
+	testReadBytes(t, []byte("*3\r\n*3\r\n$2\r\np2\r\n$1\r\nr\r\n$2\r\np4\r\n*2\r\n*3\r\n*3\r\n*2\r\n$2\r\nid\r\n:1\r\n*2\r\n$6\r\nlabels\r\n*1\r\n$3\r\npod\r\n*2\r\n$10\r\nproperties\r\n*5\r\n*2\r\n$2\r\nid\r\n$2\r\nx2\r\n*2\r\n$4\r\nname\r\n$4\r\npod2\r\n*2\r\n$2\r\nts\r\n:10241\r\n*2\r\n$5\r\nalive\r\n$4\r\ntrue\r\n*2\r\n$2\r\nfv\r\n$9\r\n3.1415927\r\n$15\r\n[(1), [3], (3)]\r\n*3\r\n*2\r\n$2\r\nid\r\n:3\r\n*2\r\n$6\r\nlabels\r\n*1\r\n$3\r\npod\r\n*2\r\n$10\r\nproperties\r\n*5\r\n*2\r\n$2\r\nid\r\n$2\r\nx4\r\n*2\r\n$4\r\nname\r\n$4\r\npod4\r\n*2\r\n$2\r\nts\r\n:10243\r\n*2\r\n$5\r\nalive\r\n$5\r\nfalse\r\n*2\r\n$2\r\nfv\r\n$9\r\n3.1415929\r\n*3\r\n*3\r\n*2\r\n$2\r\nid\r\n:1\r\n*2\r\n$6\r\nlabels\r\n*1\r\n$3\r\npod\r\n*2\r\n$10\r\nproperties\r\n*5\r\n*2\r\n$2\r\nid\r\n$2\r\nx2\r\n*2\r\n$4\r\nname\r\n$4\r\npod2\r\n*2\r\n$2\r\nts\r\n:10241\r\n*2\r\n$5\r\nalive\r\n$4\r\ntrue\r\n*2\r\n$2\r\nfv\r\n$9\r\n3.1415927\r\n$25\r\n[(1), [0], (0), [2], (3)]\r\n*3\r\n*2\r\n$2\r\nid\r\n:3\r\n*2\r\n$6\r\nlabels\r\n*1\r\n$3\r\npod\r\n*2\r\n$10\r\nproperties\r\n*5\r\n*2\r\n$2\r\nid\r\n$2\r\nx4\r\n*2\r\n$4\r\nname\r\n$4\r\npod4\r\n*2\r\n$2\r\nts\r\n:10243\r\n*2\r\n$5\r\nalive\r\n$5\r\nfalse\r\n*2\r\n$2\r\nfv\r\n$9\r\n3.1415929\r\n*2\r\n$19\r\nCached execution: 1\r\n$52\r\nQuery internal execution time: 0.779132 milliseconds\r\n"))
+}
+
+func testReadBytes(t *testing.T, resp []byte) {
+	b, err := proto.NewReader(bytes.NewReader(resp)).ReadBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(resp, b) {
+		t.Fatalf("expected %q, got %q", string(resp), string(b))
+	}
+}
