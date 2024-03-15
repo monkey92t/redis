@@ -557,15 +557,13 @@ func (r *Reader) readBytes() error {
 		if err != nil {
 			return err
 		}
-		if n > 0 {
+		if n >= 0 {
 			b := make([]byte, n+2)
 			_, err = io.ReadFull(r.rd, b)
 			if err != nil {
 				return err
 			}
 			r.buff = append(r.buff, b...)
-		} else if n == 0 {
-			r.buff = append(r.buff, '\r', '\n')
 		}
 	case RespArray, RespSet, RespPush:
 		n, err := r.readBytesLen()
