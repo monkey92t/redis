@@ -21,6 +21,13 @@ func (c cmdable) GraphQuery(ctx context.Context, key, query string) *GraphCmd {
 	return cmd
 }
 
+// GraphIndexes show all graph indexes
+//func (c cmdable) GraphIndexes(ctx context.Context, key string) {
+//	cmd := NewGraphCmd(ctx, "GRAPH.QUERY", key, query)
+//	_ = c(ctx, cmd)
+//	return cmd
+//}
+
 // ----------------------------------------------------------------------------
 
 type (
@@ -91,6 +98,20 @@ func (g *GraphResult) Row() map[string]any {
 	return row
 }
 
+// RowBasic 读取一行数据，但只处理基本数据类型
+func (g *GraphResult) RowBasic() map[string]GraphData {
+	if g.noResult || len(g.field) == 0 || len(g.rows) == 0 || len(g.rows[0]) == 0 {
+		return nil
+	}
+	row := make(map[string]GraphData, len(g.field))
+	for i := 0; i < len(g.field); i++ {
+		if g.rows[0][i].typ == graphResultBasic {
+			row[g.field[i]] = *g.rows[0][i].basic
+		}
+	}
+	return row
+}
+
 // RowScan 将结果集的一行扫描到 dest 中，dest 必须是结构体指针
 // 如果没有结果集，或非结果集响应，返回 Nil
 func (g *GraphResult) RowScan(dest any) error {
@@ -120,6 +141,24 @@ func (g *GraphResult) Rows() []map[string]any {
 				row[g.field[f]] = g.rows[i][f].node.Map()
 			case graphResultEdge:
 				row[g.field[f]] = g.rows[i][f].edge.Map()
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// RowsBasic 读取所有数据，但只处理基本数据
+func (g *GraphResult) RowsBasic() []map[string]GraphData {
+	if g.noResult || len(g.field) == 0 || len(g.rows) == 0 || len(g.rows[0]) == 0 {
+		return nil
+	}
+	rows := make([]map[string]GraphData, 0, len(g.rows))
+	for i := 0; i < len(g.rows); i++ {
+		row := make(map[string]GraphData, len(g.field))
+		for f := 0; f < len(g.field); f++ {
+			if g.rows[i][f].typ == graphResultBasic {
+				row[g.field[f]] = *g.rows[i][f].basic
 			}
 		}
 		rows = append(rows, row)
@@ -448,6 +487,28 @@ func newStructSpec(t reflect.Type, fieldTag string) *graphStructSpec {
 
 	return out
 }
+
+// -------------------------------------------------------------------------------------
+
+// index
+//type (
+//	GraphIndexType       string
+//	GraphIndexEntityType string
+//	GraphIndexStatus     string
+//)
+//
+//const (
+//	GraphIndexRange             GraphIndexType       = "RANGE"
+//	GraphIndexFulltext          GraphIndexType       = "FULLTEXT"
+//	GraphIndexVector            GraphIndexType       = "VECTOR"
+//	GraphIndexNode              GraphIndexEntityType = "NODE"
+//	GraphIndexRelationship      GraphIndexEntityType = "RELATIONSHIP"
+//	GraphIndexOperational       GraphIndexStatus     = "OPERATIONAL"
+//	GraphIndexFailed            GraphIndexStatus     = "FAILED"
+//	GraphIndexUnderConstruction GraphIndexStatus     = "UNDER CONSTRUCTION"
+//)
+
+// -------------------------------------------------------------------------------------
 
 //
 //type Graph struct {
