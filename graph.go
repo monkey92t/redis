@@ -316,7 +316,7 @@ func (g *GraphResult) scanStruct(v graphStructValue, row []graphRow) error {
 		key := g.field[i]
 		idx, ok := v.spec.m[key]
 		if !ok {
-			return nil
+			continue
 		}
 		field := v.value.Field(idx)
 		isPtr := field.Kind() == reflect.Ptr
