@@ -210,10 +210,15 @@ func (d GraphData) String() string {
 }
 
 func (d GraphData) Int() int {
-	if d.typ == graphInteger {
+	switch d.typ {
+	case graphInteger:
 		return int(d.integerVal)
+	case graphString:
+		n, _ := strconv.Atoi(d.stringVal)
+		return n
+	default:
+		return 0
 	}
-	return 0
 }
 
 func (d GraphData) Bool() bool {
