@@ -518,7 +518,7 @@ func (p *ConnPool) isHealthyConn(cn *Conn) bool {
 	//		return false
 	//	}
 	//}
-	if connCheck(cn.netConn) != nil {
+	if connCheck(cn.sysConn) != nil {
 		return false
 	}
 
