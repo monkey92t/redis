@@ -19,7 +19,7 @@ type Conn struct {
 	netConn net.Conn
 
 	// for checking the health status of the connection, it may be nil.
-	rawConn syscall.RawConn
+	sysConn syscall.Conn
 
 	rd *proto.Reader
 	bw *bufio.Writer
@@ -60,7 +60,7 @@ func (cn *Conn) SetNetConn(netConn net.Conn) {
 }
 
 func (cn *Conn) setRawConn() {
-	cn.rawConn = nil
+	cn.sysConn = nil
 	conn := cn.netConn
 	if conn == nil {
 		return
@@ -70,9 +70,7 @@ func (cn *Conn) setRawConn() {
 	}
 
 	if sysConn, ok := conn.(syscall.Conn); ok {
-		if rawConn, err := sysConn.SyscallConn(); err == nil {
-			cn.rawConn = rawConn
-		}
+		cn.sysConn = sysConn
 	}
 }
 
