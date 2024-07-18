@@ -3,10 +3,8 @@ package pool
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"net"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9/internal/proto"
@@ -19,7 +17,7 @@ type Conn struct {
 	netConn net.Conn
 
 	// for checking the health status of the connection, it may be nil.
-	rawConn syscall.RawConn
+	//sysConn syscall.Conn
 
 	rd *proto.Reader
 	bw *bufio.Writer
@@ -60,20 +58,18 @@ func (cn *Conn) SetNetConn(netConn net.Conn) {
 }
 
 func (cn *Conn) setRawConn() {
-	cn.rawConn = nil
-	conn := cn.netConn
-	if conn == nil {
-		return
-	}
-	if tlsConn, ok := conn.(*tls.Conn); ok {
-		conn = tlsConn.NetConn()
-	}
-
-	if sysConn, ok := conn.(syscall.Conn); ok {
-		if rawConn, err := sysConn.SyscallConn(); err == nil {
-			cn.rawConn = rawConn
-		}
-	}
+	//cn.sysConn = nil
+	//conn := cn.netConn
+	//if conn == nil {
+	//	return
+	//}
+	//if tlsConn, ok := conn.(*tls.Conn); ok {
+	//	conn = tlsConn.NetConn()
+	//}
+	//
+	//if sysConn, ok := conn.(syscall.Conn); ok {
+	//	cn.sysConn = sysConn
+	//}
 }
 
 func (cn *Conn) Write(b []byte) (int, error) {
@@ -119,7 +115,7 @@ func (cn *Conn) WithWriter(
 }
 
 func (cn *Conn) Close() error {
-	cn.rawConn = nil
+	//cn.sysConn = nil
 	return cn.netConn.Close()
 }
 
