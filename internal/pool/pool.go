@@ -511,16 +511,16 @@ func (p *ConnPool) isHealthyConn(cn *Conn) bool {
 		return false
 	}
 
-	//if cn.sysConn != nil {
-	//	// reset previous timeout.
-	//	_ = cn.netConn.SetDeadline(zeroTime)
-	//	if connCheck(cn.sysConn) != nil {
-	//		return false
-	//	}
-	//}
-	if connCheck(cn.sysConn) != nil {
-		return false
+	if cn.sysConn != nil {
+		// reset previous timeout.
+		_ = cn.netConn.SetDeadline(zeroTime)
+		if connCheck(cn.sysConn) != nil {
+			return false
+		}
 	}
+	//if connCheck(cn.sysConn) != nil {
+	//	return false
+	//}
 
 	cn.SetUsedAt(now)
 	return true
