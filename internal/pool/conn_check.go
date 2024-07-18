@@ -10,7 +10,7 @@ import (
 
 var errUnexpectedRead = errors.New("unexpected read from socket")
 
-func connCheck(sysConn syscall.Conn) error {
+func connCheck(rawConn syscall.RawConn) error {
 	//// Reset previous timeout.
 	//_ = conn.SetDeadline(time.Time{})
 	//
@@ -22,10 +22,10 @@ func connCheck(sysConn syscall.Conn) error {
 	//if !ok {
 	//	return nil
 	//}
-	rawConn, err := sysConn.SyscallConn()
-	if err != nil {
-		return err
-	}
+	//rawConn, err := sysConn.SyscallConn()
+	//if err != nil {
+	//	return err
+	//}
 
 	var sysErr error
 

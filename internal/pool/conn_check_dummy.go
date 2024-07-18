@@ -6,6 +6,6 @@ import (
 	"syscall"
 )
 
-func connCheck(_ syscall.Conn) error {
+func connCheck(_ syscall.RawConn) error {
 	return nil
 }
